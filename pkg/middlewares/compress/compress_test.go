@@ -32,7 +32,9 @@ func TestShouldCompressWhenNoContentEncodingHeader(t *testing.T) {
 		_, err := rw.Write(baseBody)
 		assert.NoError(t, err)
 	})
-	handler := &compress{next: next}
+
+	handler, err := New(context.Background(), next, dynamic.Compress{}, "test")
+	require.NoError(t, err)
 
 	rw := httptest.NewRecorder()
 	handler.ServeHTTP(rw, req)
@@ -58,7 +60,9 @@ func TestShouldNotCompressWhenContentEncodingHeader(t *testing.T) {
 			http.Error(rw, err.Error(), http.StatusInternalServerError)
 		}
 	})
-	handler := &compress{next: next}
+
+	handler, err := New(context.Background(), next, dynamic.Compress{}, "test")
+	require.NoError(t, err)
 
 	rw := httptest.NewRecorder()
 	handler.ServeHTTP(rw, req)
@@ -79,7 +83,9 @@ func TestShouldNotCompressWhenNoAcceptEncodingHeader(t *testing.T) {
 			http.Error(rw, err.Error(), http.StatusInternalServerError)
 		}
 	})
-	handler := &compress{next: next}
+
+	handler, err := New(context.Background(), next, dynamic.Compress{}, "test")
+	require.NoError(t, err)
 
 	rw := httptest.NewRecorder()
 	handler.ServeHTTP(rw, req)
@@ -190,8 +196,10 @@ func TestIntegrationShouldNotCompress(t *testing.T) {
 
 	for _, test := range testCases {
 		t.Run(test.name, func(t *testing.T) {
-			compress := &compress{next: test.handler}
-			ts := httptest.NewServer(compress)
+			handler, err := New(context.Background(), test.handler, dynamic.Compress{}, "test")
+			require.NoError(t, err)
+
+			ts := httptest.NewServer(handler)
 			defer ts.Close()
 
 			req := testhelpers.MustNewRequest(http.MethodGet, ts.URL, nil)
@@ -223,7 +231,10 @@ func TestShouldWriteHeaderWhenFlush(t *testing.T) {
 			http.Error(rw, err.Error(), http.StatusInternalServerError)
 		}
 	})
-	handler := &compress{next: next}
+
+	handler, err := New(context.Background(), next, dynamic.Compress{}, "test")
+	require.NoError(t, err)
+
 	ts := httptest.NewServer(handler)
 	defer ts.Close()
 
@@ -272,8 +283,10 @@ func TestIntegrationShouldCompress(t *testing.T) {
 
 	for _, test := range testCases {
 		t.Run(test.name, func(t *testing.T) {
-			compress := &compress{next: test.handler}
-			ts := httptest.NewServer(compress)
+			handler, err := New(context.Background(), test.handler, dynamic.Compress{}, "test")
+			require.NoError(t, err)
+
+			ts := httptest.NewServer(handler)
 			defer ts.Close()
 
 			req := testhelpers.MustNewRequest(http.MethodGet, ts.URL, nil)
