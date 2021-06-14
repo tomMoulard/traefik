@@ -152,6 +152,7 @@ func TestShouldNotCompressWhenSpecificContentType(t *testing.T) {
 			rw := httptest.NewRecorder()
 			handler.ServeHTTP(rw, req)
 
+			t.Log(rw.Header())
 			assert.Empty(t, rw.Header().Get(acceptEncodingHeader))
 			assert.Empty(t, rw.Header().Get(contentEncodingHeader))
 			assert.EqualValues(t, rw.Body.Bytes(), baseBody)

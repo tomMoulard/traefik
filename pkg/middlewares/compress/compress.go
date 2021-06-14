@@ -1,8 +1,8 @@
 package compress
 
 import (
-	"compress/gzip"
 	"context"
+	"fmt"
 	"mime"
 	"net/http"
 
@@ -47,7 +47,7 @@ func (c *compress) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		log.FromContext(middlewares.GetLoggerCtx(context.Background(), c.name, typeName)).Debug(err)
 	}
-
+	fmt.Println(mediaType, c.excludes)
 	if contains(c.excludes, mediaType) {
 		c.next.ServeHTTP(rw, req)
 	} else {
@@ -61,10 +61,8 @@ func (c *compress) GetTracingInformation() (string, ext.SpanKindEnum) {
 }
 
 func (c *compress) gzipHandler(ctx context.Context) http.Handler {
-	wrapper, err := gziphandler.GzipHandlerWithOpts(
-		gziphandler.ContentTypeExceptions(c.excludes),
-		gziphandler.CompressionLevel(gzip.DefaultCompression),
-		gziphandler.MinSize(gziphandler.DefaultMinSize))
+	// wrapper, err := gziphandler.GzipHandlerWithOpts(gziphandler.ContentTypeExceptions(c.excludes))
+	wrapper, err := gziphandler.GzipHandlerWithOpts()
 	if err != nil {
 		log.FromContext(ctx).Error(err)
 	}
