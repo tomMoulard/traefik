@@ -1255,7 +1255,7 @@ func TestLoadHTTPRoutes(t *testing.T) {
 		},
 		{
 			desc:  "same namespaces matching",
-			paths: []string{"services.yml", "httproute/with_same_namespace.yml"},
+			paths: []string{"services.yml", "httproute/with_namespace_same.yml"},
 			entryPoints: map[string]Entrypoint{
 				"web": {Address: ":80"},
 			},
@@ -1310,7 +1310,7 @@ func TestLoadHTTPRoutes(t *testing.T) {
 		},
 		{
 			desc:  "all namespaces matching",
-			paths: []string{"services.yml", "httproute/with_all_namespaces.yml"},
+			paths: []string{"services.yml", "httproute/with_namespaces_all.yml"},
 			entryPoints: map[string]Entrypoint{
 				"web": {Address: ":80"},
 			},
