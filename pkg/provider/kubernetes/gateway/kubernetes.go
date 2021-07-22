@@ -492,13 +492,20 @@ func (p *Provider) fillGatewayConf(ctx context.Context, client Client, gateway *
 }
 
 func gatewayHTTPRouteToHTTPConf(ctx context.Context, ep string, listener v1alpha1.Listener, gateway *v1alpha1.Gateway, client Client, conf *dynamic.Configuration) []metav1.Condition {
-	// TODO: support RouteNamespaces
 	selector := labels.Everything()
 	if listener.Routes.Selector != nil {
 		selector = labels.SelectorFromSet(listener.Routes.Selector.MatchLabels)
 	}
 
-	httpRoutes, err := client.GetHTTPRoutes(gateway.Namespace, selector)
+	namespace := gateway.Namespace
+	if listener.Routes.Namespaces != nil && listener.Routes.Namespaces.From != nil {
+		// TODO: Implement v1alpha1.RouteSelectSelector
+		if *listener.Routes.Namespaces.From == v1alpha1.RouteSelectAll {
+			namespace = metav1.NamespaceAll
+		}
+	}
+
+	httpRoutes, err := client.GetHTTPRoutes(namespace, selector)
 	if err != nil {
 		// update "ResolvedRefs" status true with "InvalidRoutesRef" reason
 		return []metav1.Condition{{
@@ -577,7 +584,7 @@ func gatewayHTTPRouteToHTTPConf(ctx context.Context, ep string, listener v1alpha
 			if len(routeRule.ForwardTo) == 1 && isInternalService(routeRule.ForwardTo[0]) {
 				router.Service = routeRule.ForwardTo[0].BackendRef.Name
 			} else {
-				wrrService, subServices, err := loadServices(client, gateway.Namespace, routeRule.ForwardTo)
+				wrrService, subServices, err := loadServices(client, namespace, routeRule.ForwardTo)
 				if err != nil {
 					// update "ResolvedRefs" status true with "DroppedRoutes" reason
 					conditions = append(conditions, metav1.Condition{
