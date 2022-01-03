@@ -1,11 +1,14 @@
 package udp
 
+import "C"
 import (
 	"errors"
 	"io"
 	"net"
 	"sync"
 	"time"
+
+	"github.com/traefik/traefik/v2/pkg/log"
 )
 
 // maxDatagramSize is the maximum size of a UDP datagram.
@@ -167,7 +170,7 @@ func (l *Listener) getConn(raddr net.Addr) (*Conn, error) {
 	l.mu.RLock()
 	conn, ok := l.conns[raddr.String()]
 	l.mu.RUnlock()
-	if ok && (l.requests == 0 || conn.requests < l.requests) {
+	if ok && (l.requests <= 0 || conn.requests < l.requests) {
 		return conn, nil
 	}
 
@@ -228,12 +231,6 @@ func (l *Listener) getLocalConn(raddr net.Addr) (*connWrapper, error) {
 			deadline := lconnWrapped.lastActivity.Add(l.timeout)
 			lconnWrapped.muActivity.RUnlock()
 
-			// FIXME: usefull ?
-			_, exists := l.conns[raddr.String()]
-			if exists {
-				continue
-			}
-
 			if time.Now().After(deadline) {
 				lconnWrapped.Close()
 
@@ -245,30 +242,45 @@ func (l *Listener) getLocalConn(raddr net.Addr) (*connWrapper, error) {
 			}
 		}
 	}()
-	//
-	//go func() {
-	//	for {
-	//		buf := make([]byte, maxDatagramSize)
-	//		n, err := lconnWrapped.Read(buf)
-	//		if err != nil {
-	//			log.WithoutContext().Errorf("FIXME: %v", err)
-	//			if lconnWrapped.closed {
-	//				return
-	//			}
-	//			continue
-	//		}
-	//
-	//		lconnWrapped.muActivity.Lock()
-	//		lconnWrapped.lastActivity = time.Now()
-	//		lconnWrapped.muActivity.Unlock()
-	//
-	//		_, err = l.pConn.WriteTo(buf[:n], raddr)
-	//		if err != nil {
-	//			log.WithoutContext().Errorf("FIXME: %v", err)
-	//			continue
-	//		}
-	//	}
-	//}()
+
+	go func() {
+		for {
+			buf := make([]byte, maxDatagramSize)
+			n, addr, err := lconnWrapped.ReadFrom(buf)
+			if err != nil {
+				if lconnWrapped.closed {
+					return
+				}
+
+				log.WithoutContext().Errorf("cannot read from backend: %v", err)
+
+				if netErr, ok := err.(net.Error); ok && netErr.Temporary() {
+					continue
+				}
+
+				lconnWrapped.Close()
+				return
+			}
+
+			lconnWrapped.muTargets.RLock()
+			_, exists := lconnWrapped.targets[addr.String()]
+			lconnWrapped.muTargets.RUnlock()
+
+			if !exists {
+				continue
+			}
+
+			lconnWrapped.muActivity.Lock()
+			lconnWrapped.lastActivity = time.Now()
+			lconnWrapped.muActivity.Unlock()
+
+			_, err = l.pConn.WriteTo(buf[:n], raddr)
+			if err != nil {
+				log.WithoutContext().Errorf("cannot write to backend: %v", err)
+				continue
+			}
+		}
+	}()
 
 	return lconnWrapped, nil
 }
@@ -276,12 +288,20 @@ func (l *Listener) getLocalConn(raddr net.Addr) (*connWrapper, error) {
 type connWrapper struct {
 	*net.UDPConn
 
+	closed bool
+
+	muTargets sync.RWMutex
+	targets   map[string]struct{}
+
 	muActivity   sync.RWMutex
 	lastActivity time.Time
 }
 
 func NewConnWrapper(conn *net.UDPConn) *connWrapper {
-	return &connWrapper{UDPConn: conn}
+	return &connWrapper{
+		UDPConn: conn,
+		targets: make(map[string]struct{}),
+	}
 }
 
 func (c *connWrapper) WriteTo(p []byte, target net.Addr) (int, error) {
@@ -289,7 +309,17 @@ func (c *connWrapper) WriteTo(p []byte, target net.Addr) (int, error) {
 	c.lastActivity = time.Now()
 	c.muActivity.Unlock()
 
+	c.muTargets.Lock()
+	c.targets[target.String()] = struct{}{}
+	c.muTargets.Unlock()
+
 	return c.UDPConn.WriteTo(p, target)
+}
+
+func (c *connWrapper) Close() error {
+	c.closed = true
+
+	return c.UDPConn.Close()
 }
 
 func (l *Listener) newConn(rAddr net.Addr) *Conn {
@@ -345,6 +375,7 @@ func (c *Conn) readLoop() {
 					c.Close()
 					return
 				}
+
 				continue
 			}
 		}
@@ -383,7 +414,7 @@ func (c *Conn) Read(p []byte) (int, error) {
 		return n, nil
 
 	case <-c.doneCh:
-		return 0, io.EOF
+		return 0, io.EOF // FIXME custom error ?
 	}
 }
 
@@ -394,6 +425,9 @@ func (c *Conn) Write(p []byte) (n int, err error) {
 	c.muActivity.Lock()
 	c.lastActivity = time.Now()
 	c.muActivity.Unlock()
+
+	// FIXME: update tests
+	println("#####################################")
 
 	return c.listener.pConn.WriteTo(p, c.rAddr)
 }

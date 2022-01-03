@@ -375,32 +375,6 @@ func TestReadLoopMaxDataSize(t *testing.T) {
 	}
 }
 
-// requireEcho tests that the conn session is live and functional,
-// by writing data through it, and expecting the same data as a response when reading on it.
-// It fatals if the read blocks longer than timeout,
-// which is useful to detect regressions that would make a test wait forever.
-func requireEcho(t *testing.T, data string, conn io.ReadWriter, timeout time.Duration) {
-	t.Helper()
-
-	_, err := conn.Write([]byte(data))
-	require.NoError(t, err)
-
-	doneChan := make(chan struct{})
-	go func() {
-		b := make([]byte, 1024*1024)
-		n, err := conn.Read(b)
-		require.NoError(t, err)
-		assert.Equal(t, data, string(b[:n]))
-		close(doneChan)
-	}()
-
-	select {
-	case <-doneChan:
-	case <-time.Tick(timeout):
-		t.Fatalf("Timeout during echo for: %s", data)
-	}
-}
-
 func Test_RequestsLimit(t *testing.T) {
 	requests := 42
 	testCases := []struct {
@@ -467,7 +441,8 @@ func Test_RequestsLimit(t *testing.T) {
 			listener := newServerWithOptions(t, proxyAddr, time.Second, test.requests, proxyHandler)
 			defer listener.Close()
 
-			time.Sleep(time.Second)
+			time.Sleep(time.Second) // FIXME ?
+
 			udpConn, err := net.Dial("udp", proxyAddr)
 			require.NoError(t, err)
 
@@ -475,22 +450,100 @@ func Test_RequestsLimit(t *testing.T) {
 			for i := 0; i < requests; i++ {
 				_, err = udpConn.Write([]byte("DATAWRITE"))
 				if err != nil {
-					t.Logf("%v\n", err)
 					gotErr = true
 				}
 
 				b := make([]byte, 2048)
 				n, err := udpConn.Read(b)
 				if err != nil {
-					println(string(b[:n]))
-					t.Logf("%v\n", err)
 					gotErr = true
 				}
-				//t.Logf("%s -> %d, %v", string(b), n, err)
+				assert.Equal(t, "ACK", string(b[:n]))
 			}
 
 			assert.Equal(t, test.wantErr, gotErr)
 			assert.Equal(t, test.wantLBCalls, lbCalls)
 		})
+	}
+}
+
+func Test_UnknownBackend(t *testing.T) {
+	backendAddr, err := net.ResolveUDPAddr("udp", "127.0.0.1:8080")
+	require.NoError(t, err)
+
+	backendConn, err := net.ListenUDP("udp", backendAddr)
+	require.NoError(t, err)
+	defer backendConn.Close()
+
+	backend2Addr, err := net.ResolveUDPAddr("udp", "127.0.0.1:8081")
+	require.NoError(t, err)
+
+	backend2, err := net.ListenUDP("udp", backend2Addr)
+	require.NoError(t, err)
+	defer backend2.Close()
+
+	go func() {
+		for {
+			b := make([]byte, 2048)
+			_, from, err := backendConn.ReadFrom(b)
+			if err != nil {
+				return
+			}
+
+			_, err = backendConn.WriteTo([]byte("ACK"), from)
+			if err != nil {
+				return
+			}
+
+			_, err = backend2.WriteTo([]byte("FAKE"), from)
+			if err != nil {
+				return
+			}
+		}
+	}()
+
+	proxy, err := NewProxy(backendAddr.String())
+	require.NoError(t, err)
+
+	listener := newServerWithOptions(t, ":8083", time.Second, 0, proxy)
+	defer listener.Close()
+
+	udpConn, err := net.Dial("udp", ":8083")
+	require.NoError(t, err)
+
+	for i := 0; i < 42; i++ {
+		_, err = udpConn.Write([]byte("DATAWRITE"))
+		require.NoError(t, err)
+
+		b := make([]byte, 2048)
+		n, err := udpConn.Read(b)
+		require.NoError(t, err)
+		assert.Equal(t, "ACK", string(b[:n]))
+	}
+}
+
+// requireEcho tests that the conn session is live and functional,
+// by writing data through it, and expecting the same data as a response when reading on it.
+// It fatals if the read blocks longer than timeout,
+// which is useful to detect regressions that would make a test wait forever.
+func requireEcho(t *testing.T, data string, conn io.ReadWriter, timeout time.Duration) {
+	t.Helper()
+
+	_, err := conn.Write([]byte(data))
+	require.NoError(t, err)
+
+	doneChan := make(chan struct{})
+	go func() {
+		b := make([]byte, 1024*1024)
+		n, err := conn.Read(b)
+		require.NoError(t, err)
+		assert.Equal(t, data, string(b[:n]))
+		close(doneChan)
+	}()
+
+	select {
+	case <-doneChan:
+	case <-time.Tick(timeout):
+		t.Fatalf("Timeout during echo for: %s", data)
 	}
 }
