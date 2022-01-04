@@ -13,21 +13,10 @@ import (
 
 func TestProxy_ServeUDP(t *testing.T) {
 	backendAddr := "127.0.0.1:8081"
-	backendListener := newServer(t, backendAddr, HandlerFunc(func(conn *Conn) {
-		for {
-			b := make([]byte, 1024*1024)
-			n, err := conn.Read(b)
-			if err != nil {
-				return
-			}
-
-			_, err = conn.Write(b[:n])
-			if err != nil {
-				return
-			}
-		}
-	}))
-	defer backendListener.Close()
+	backendConn := newEchoBackend(t, backendAddr, 1024*1024)
+	defer func() {
+		require.NoError(t, backendConn.Close())
+	}()
 
 	proxy, err := NewProxy(backendAddr)
 	require.NoError(t, err)
@@ -61,28 +50,22 @@ func TestProxy_ServeUDP_MaxDataSize(t *testing.T) {
 	// 65535 − 8 (UDP header) − 20 (IP header).
 	dataSize := 65507
 
-	backendAddr := ":8083"
-	backendListener := newServer(t, backendAddr, HandlerFunc(func(conn *Conn) {
-		buffer := make([]byte, dataSize)
-
-		n, err := conn.Read(buffer)
-		require.NoError(t, err)
-
-		_, err = conn.Write(buffer[:n])
-		require.NoError(t, err)
-	}))
-	defer backendListener.Close()
+	backendAddr := "127.0.0.1:8083"
+	backendConn := newEchoBackend(t, backendAddr, dataSize)
+	defer func() {
+		require.NoError(t, backendConn.Close())
+	}()
 
 	proxy, err := NewProxy(backendAddr)
 	require.NoError(t, err)
 
-	proxyAddr := ":8082"
-	proxyListener := newServer(t, proxyAddr, proxy)
-	defer proxyListener.Close()
+	listenerAddr := ":8082"
+	listener := newServer(t, listenerAddr, proxy)
+	defer listener.Close()
 
 	time.Sleep(time.Second)
 
-	udpConn, err := net.Dial("udp", proxyAddr)
+	udpConn, err := net.Dial("udp", listenerAddr)
 	require.NoError(t, err)
 
 	want := make([]byte, dataSize)
@@ -130,4 +113,32 @@ func newServerWithOptions(t *testing.T, addr string, timeout time.Duration, requ
 	}()
 
 	return listener
+}
+
+func newEchoBackend(t *testing.T, addr string, dataSize int) *net.UDPConn {
+	t.Helper()
+
+	backendAddr, err := net.ResolveUDPAddr("udp", addr)
+	require.NoError(t, err)
+
+	backendConn, err := net.ListenUDP("udp", backendAddr)
+	require.NoError(t, err)
+
+	go func() {
+		for {
+			buffer := make([]byte, dataSize)
+
+			n, addr, err := backendConn.ReadFrom(buffer)
+			if err != nil {
+				return
+			}
+
+			_, err = backendConn.WriteTo(buffer[:n], addr)
+			if err != nil {
+				return
+			}
+		}
+	}()
+
+	return backendConn
 }

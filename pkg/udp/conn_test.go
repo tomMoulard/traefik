@@ -46,9 +46,9 @@ func TestConsecutiveWrites(t *testing.T) {
 				n2, err = conn.Read(b2)
 				require.NoError(t, err)
 
-				_, err = conn.Write(b[:n])
+				_, err = conn.listener.pConn.WriteTo(b[:n], conn.rAddr)
 				require.NoError(t, err)
-				_, err = conn.Write(b2[:n2])
+				_, err = conn.listener.pConn.WriteTo(b2[:n2], conn.rAddr)
 				require.NoError(t, err)
 			}()
 		}
@@ -99,12 +99,12 @@ func TestListenNotBlocking(t *testing.T) {
 				b := make([]byte, 2048)
 				n, err := conn.Read(b)
 				require.NoError(t, err)
-				_, err = conn.Write(b[:n])
+				_, err = conn.listener.pConn.WriteTo(b[:n], conn.rAddr)
 				require.NoError(t, err)
 
 				n, err = conn.Read(b)
 				require.NoError(t, err)
-				_, err = conn.Write(b[:n])
+				_, err = conn.listener.pConn.WriteTo(b[:n], conn.rAddr)
 				require.NoError(t, err)
 
 				// This should not block second call
@@ -256,7 +256,7 @@ func TestShutdown(t *testing.T) {
 					if string(b[:n]) == "CLOSE" {
 						return
 					}
-					_, err = conn.Write(b[:n])
+					_, err = conn.listener.pConn.WriteTo(b[:n], conn.rAddr)
 					require.NoError(t, err)
 				}
 			}()
@@ -407,28 +407,13 @@ func Test_RequestsLimit(t *testing.T) {
 	for i, test := range testCases {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
-			backendAddr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("127.0.0.1:808%d", 2*i))
-			require.NoError(t, err)
-
-			backendConn, err := net.ListenUDP("udp", backendAddr)
-			require.NoError(t, err)
-			defer backendConn.Close()
-
-			go func() {
-				for {
-					b := make([]byte, 2048)
-					_, from, err := backendConn.ReadFrom(b)
-					if err != nil {
-						return
-					}
-					_, err = backendConn.WriteTo([]byte("ACK"), from)
-					if err != nil {
-						return
-					}
-				}
+			backendAddr := fmt.Sprintf("127.0.0.1:808%d", 2*i)
+			backendConn := newEchoBackend(t, backendAddr, 2048)
+			defer func() {
+				require.NoError(t, backendConn.Close())
 			}()
 
-			proxy, err := NewProxy(backendAddr.String())
+			proxy, err := NewProxy(backendAddr)
 			require.NoError(t, err)
 
 			lbCalls := 0
@@ -437,13 +422,11 @@ func Test_RequestsLimit(t *testing.T) {
 				proxy.ServeUDP(conn)
 			})
 
-			proxyAddr := fmt.Sprintf(":808%d", 2*i+1)
-			listener := newServerWithOptions(t, proxyAddr, time.Second, test.requests, proxyHandler)
+			listenerAddr := fmt.Sprintf(":808%d", 2*i+1)
+			listener := newServerWithOptions(t, listenerAddr, time.Second, test.requests, proxyHandler)
 			defer listener.Close()
 
-			time.Sleep(time.Second) // FIXME ?
-
-			udpConn, err := net.Dial("udp", proxyAddr)
+			udpConn, err := net.Dial("udp", listenerAddr)
 			require.NoError(t, err)
 
 			var gotErr bool
@@ -458,7 +441,7 @@ func Test_RequestsLimit(t *testing.T) {
 				if err != nil {
 					gotErr = true
 				}
-				assert.Equal(t, "ACK", string(b[:n]))
+				assert.Equal(t, "DATAWRITE", string(b[:n]))
 			}
 
 			assert.Equal(t, test.wantErr, gotErr)

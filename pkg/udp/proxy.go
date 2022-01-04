@@ -1,8 +1,6 @@
 package udp
 
 import (
-	"errors"
-	"io"
 	"net"
 
 	"github.com/traefik/traefik/v2/pkg/log"
@@ -34,17 +32,19 @@ func (p *Proxy) ServeUDP(conn *Conn) {
 			buf := make([]byte, maxDatagramSize)
 			n, err := conn.Read(buf)
 			if err != nil {
-				if errors.Is(err, io.EOF) {
-					errChan <- nil
-					return
-				}
+				// conn.Read only returns an error if the connection has been closed.
+				// So we want to quit early, and do not log the error.
+				errChan <- nil
 
-				errChan <- err
 				return
 			}
 
 			_, err = conn.lConn.WriteTo(buf[:n], p.target)
 			if err != nil {
+				if netErr, ok := err.(net.Error); ok && netErr.Temporary() || netErr.Timeout() {
+					continue
+				}
+
 				errChan <- err
 				return
 			}

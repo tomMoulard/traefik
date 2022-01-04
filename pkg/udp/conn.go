@@ -71,6 +71,7 @@ func (l *Listener) Accept() (*Conn, error) {
 		// l.acceptCh got closed
 		return nil, errClosedListener
 	}
+
 	return c, nil
 }
 
@@ -252,11 +253,11 @@ func (l *Listener) getLocalConn(raddr net.Addr) (*connWrapper, error) {
 					return
 				}
 
-				log.WithoutContext().Errorf("cannot read from backend: %v", err)
-
-				if netErr, ok := err.(net.Error); ok && netErr.Temporary() {
+				if netErr, ok := err.(net.Error); ok && netErr.Temporary() || netErr.Timeout() {
 					continue
 				}
+
+				log.WithoutContext().Errorf("cannot read from backend: %v", err)
 
 				lconnWrapped.Close()
 				return
@@ -276,8 +277,12 @@ func (l *Listener) getLocalConn(raddr net.Addr) (*connWrapper, error) {
 
 			_, err = l.pConn.WriteTo(buf[:n], raddr)
 			if err != nil {
+				if netErr, ok := err.(net.Error); ok && netErr.Temporary() || netErr.Timeout() {
+					continue
+				}
+
 				log.WithoutContext().Errorf("cannot write to backend: %v", err)
-				continue
+				return
 			}
 		}
 	}()
@@ -299,8 +304,9 @@ type connWrapper struct {
 
 func NewConnWrapper(conn *net.UDPConn) *connWrapper {
 	return &connWrapper{
-		UDPConn: conn,
-		targets: make(map[string]struct{}),
+		UDPConn:      conn,
+		targets:      make(map[string]struct{}),
+		lastActivity: time.Now(),
 	}
 }
 
@@ -403,6 +409,8 @@ func (c *Conn) readLoop() {
 // Read reads up to len(p) bytes into p from the connection.
 // Each call corresponds to at most one datagram.
 // If p is smaller than the datagram, the extra bytes will be discarded.
+// Only returns an error if the connection has been closed.
+// Thus, the error can be treated as an end of conn marker and can be discarded.
 func (c *Conn) Read(p []byte) (int, error) {
 	select {
 	case c.readCh <- p:
@@ -414,22 +422,8 @@ func (c *Conn) Read(p []byte) (int, error) {
 		return n, nil
 
 	case <-c.doneCh:
-		return 0, io.EOF // FIXME custom error ?
+		return 0, io.EOF
 	}
-}
-
-// Write writes len(p) bytes from p to the underlying connection.
-// Each call sends at most one datagram.
-// It is an error to send a message larger than the system's max UDP datagram size.
-func (c *Conn) Write(p []byte) (n int, err error) {
-	c.muActivity.Lock()
-	c.lastActivity = time.Now()
-	c.muActivity.Unlock()
-
-	// FIXME: update tests
-	println("#####################################")
-
-	return c.listener.pConn.WriteTo(p, c.rAddr)
 }
 
 func (c *Conn) close() {
