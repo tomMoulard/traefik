@@ -1,4 +1,4 @@
-package accesslog
+package capture
 
 import (
 	"bufio"
@@ -8,6 +8,8 @@ import (
 
 	"github.com/traefik/traefik/v2/pkg/middlewares"
 )
+
+const CapturedRWData string = "CapturedRWData"
 
 var _ middlewares.Stateful = &captureResponseWriterWithCloseNotify{}
 

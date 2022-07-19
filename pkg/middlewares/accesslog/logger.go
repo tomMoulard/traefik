@@ -19,6 +19,7 @@ import (
 	"github.com/sirupsen/logrus"
 	ptypes "github.com/traefik/paerser/types"
 	"github.com/traefik/traefik/v2/pkg/log"
+	"github.com/traefik/traefik/v2/pkg/middlewares/capture"
 	traefiktls "github.com/traefik/traefik/v2/pkg/tls"
 	"github.com/traefik/traefik/v2/pkg/types"
 )
@@ -222,7 +223,7 @@ func (h *Handler) ServeHTTP(rw http.ResponseWriter, req *http.Request, next http
 		core[ClientHost] = forwardedFor
 	}
 
-	crw := newCaptureResponseWriter(rw)
+	crw := capture.GetCapturedResponseWriter(req.Context())
 
 	next.ServeHTTP(crw, reqWithDataTable)
 

@@ -1,4 +1,4 @@
-package accesslog
+package capture
 
 import (
 	"net/http"
