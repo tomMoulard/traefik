@@ -2,6 +2,7 @@ package capture
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -17,6 +18,15 @@ type capturer interface {
 	http.ResponseWriter
 	Size() int64
 	Status() int
+}
+
+func GetCapturedResponseWriter(ctx context.Context) capturer {
+	c, ok := ctx.Value(CapturedRWData).(capturer)
+	if !ok {
+		panic("WTF?")
+	}
+
+	return c
 }
 
 func newCaptureResponseWriter(rw http.ResponseWriter) capturer {

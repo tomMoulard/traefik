@@ -1,7 +1,9 @@
 package capture
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -14,21 +16,26 @@ import (
 func TestCapture(t *testing.T) {
 	wrapMiddleware := func(next http.Handler) (http.Handler, error) {
 		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+			rr := GetRequestReader(req.Context())
 			crw := GetCapturedResponseWriter(req.Context())
 
-			_, err := fmt.Fprintf(rw, "%d,%d,", crw.Size(), crw.Status())
+			_, err := fmt.Fprintf(rw, "%d,%d,%d,", rr.Size(), crw.Size(), crw.Status())
 			require.NoError(t, err)
 
 			next.ServeHTTP(rw, req)
 
-			_, err = fmt.Fprintf(rw, ",%d,%d", crw.Size(), crw.Status())
+			_, err = fmt.Fprintf(rw, ",%d,%d,%d", rr.Size(), crw.Size(), crw.Status())
 			require.NoError(t, err)
 		}), nil
 	}
 
 	handler := http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-		_, err := rw.Write([]byte("toto"))
+		_, err := rw.Write([]byte("foo"))
 		require.NoError(t, err)
+
+		all, err := io.ReadAll(req.Body)
+		require.NoError(t, err)
+		assert.Equal(t, "bar", string(all))
 	})
 
 	captureHandler, err := NewHandler()
@@ -43,32 +50,37 @@ func TestCapture(t *testing.T) {
 	handlers, err := chain.Then(handler)
 	require.NoError(t, err)
 
-	request, err := http.NewRequest(http.MethodGet, "http://foo/", nil)
+	request, err := http.NewRequest(http.MethodGet, "/", bytes.NewReader([]byte("bar")))
 
 	recorder := httptest.NewRecorder()
 	handlers.ServeHTTP(recorder, request)
-	// 8 = len("0,0,toto")
-	assert.Equal(t, "0,0,toto,8,200", recorder.Body.String())
+	// 3 = len("bar")
+	// 9 = len("0,0,0,toto")
+	assert.Equal(t, "0,0,0,foo,3,9,200", recorder.Body.String())
 }
 
-// BenchmarkCapture
+// BenchmarkCapture with response writer and request reader
 // $ go test -bench=. ./pkg/middlewares/capture/
 // goos: linux
 // goarch: amd64
 // pkg: github.com/traefik/traefik/v2/pkg/middlewares/capture
 // cpu: Intel(R) Core(TM) i7-10750H CPU @ 2.60GHz
-// BenchmarkCapture/2k-12            283904              4028 ns/op         508.49 MB/s        5072 B/op         14 allocs/op
-// BenchmarkCapture/20k-12           140854              8622 ns/op        2375.24 MB/s       41936 B/op         14 allocs/op
-// BenchmarkCapture/100k-12           45736             26887 ns/op        3808.60 MB/s      213968 B/op         14 allocs/op
-// BenchmarkCapture/2k_captured-12   278564              4765 ns/op         429.78 MB/s        5552 B/op         18 allocs/op
-// BenchmarkCapture/20k_captured-12  112636              9887 ns/op        2071.38 MB/s       42416 B/op         18 allocs/op
-// BenchmarkCapture/100k_captured-12  43767             30369 ns/op        3371.81 MB/s      214448 B/op         18 allocs/op
+// BenchmarkCapture/2k-12				280507	 4015 ns/op	 510.03 MB/s	  5072 B/op	14 allocs/op
+// BenchmarkCapture/20k-12				135726	 8301 ns/op	2467.26 MB/s	 41936 B/op	14 allocs/op
+// BenchmarkCapture/100k-12				 45494	26059 ns/op	3929.54 MB/s	213968 B/op	14 allocs/op
+// BenchmarkCapture/2k_captured-12		263713	 4356 ns/op	 470.20 MB/s	  5552 B/op	18 allocs/op
+// BenchmarkCapture/20k_captured-12		132243	 8790 ns/op	2329.98 MB/s	 42416 B/op	18 allocs/op
+// BenchmarkCapture/100k_captured-12	 45650	26587 ns/op	3851.57 MB/s	214448 B/op	18 allocs/op
+// BenchmarkCapture/2k_body-12			274135	 7471 ns/op	 274.12 MB/s	  5624 B/op	20 allocs/op
+// BenchmarkCapture/20k_body-12			130206	21149 ns/op	 968.36 MB/s	 42488 B/op	20 allocs/op
+// BenchmarkCapture/100k_body-12		 41600	51716 ns/op	1980.06 MB/s	214520 B/op	20 allocs/op
 // PASS
 func BenchmarkCapture(b *testing.B) {
 	testCases := []struct {
 		name    string
 		size    int
 		capture bool
+		body    bool
 	}{
 		{
 			name: "2k",
@@ -97,6 +109,21 @@ func BenchmarkCapture(b *testing.B) {
 			size:    102400,
 			capture: true,
 		},
+		{
+			name: "2k body",
+			size: 2048,
+			body: true,
+		},
+		{
+			name: "20k body",
+			size: 20480,
+			body: true,
+		},
+		{
+			name: "100k body",
+			size: 102400,
+			body: true,
+		},
 	}
 
 	for _, test := range testCases {
@@ -109,11 +136,16 @@ func BenchmarkCapture(b *testing.B) {
 				require.NoError(b, err)
 			})
 
-			req, err := http.NewRequest(http.MethodGet, "http://foo/", nil)
+			var body io.Reader
+			if test.body {
+				body = bytes.NewReader(baseBody)
+			}
+
+			req, err := http.NewRequest(http.MethodGet, "http://foo/", body)
 			require.NoError(b, err)
 
 			chain := alice.New()
-			if test.capture {
+			if test.capture || test.body {
 				captureHandler, err := NewHandler()
 				require.NotNil(b, captureHandler)
 				require.NoError(b, err)

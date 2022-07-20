@@ -26,16 +26,14 @@ func NewHandler() (*Handler, error) {
 }
 
 func (h *Handler) ServeHTTP(rw http.ResponseWriter, req *http.Request, next http.Handler) {
-	crw := newCaptureResponseWriter(rw)
-	reqCaptured := req.WithContext(context.WithValue(req.Context(), CapturedRWData, crw))
-	next.ServeHTTP(crw, reqCaptured)
-}
-
-func GetCapturedResponseWriter(ctx context.Context) capturer {
-	c, ok := ctx.Value(CapturedRWData).(capturer)
-	if !ok {
-		panic("WTF?")
+	ctx := req.Context()
+	if req.Body != nil {
+		rr := newRequestReader(req.Body)
+		ctx = context.WithValue(ctx, CapturedRRData, rr)
+		req.Body = rr
 	}
 
-	return c
+	crw := newCaptureResponseWriter(rw)
+	ctx = context.WithValue(ctx, CapturedRWData, crw)
+	next.ServeHTTP(crw, req.WithContext(ctx))
 }

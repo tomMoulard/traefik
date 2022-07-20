@@ -38,7 +38,6 @@ func (c *ChainBuilder) Build(ctx context.Context, entryPointName string) alice.C
 
 	if c.accessLoggerMiddleware != nil || c.metricsRegistry != nil && c.metricsRegistry.IsEpEnabled() {
 		chain = chain.Append(capture.WrapHandler(c.captureMiddleware))
-
 	}
 
 	if c.accessLoggerMiddleware != nil {
