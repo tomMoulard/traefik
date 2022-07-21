@@ -40,6 +40,8 @@ const (
 	entryPointReqsTLSTotalName = metricEntryPointPrefix + "requests_tls_total"
 	entryPointReqDurationName  = metricEntryPointPrefix + "request_duration_seconds"
 	entryPointOpenConnsName    = metricEntryPointPrefix + "open_connections"
+	entryPointRspsSizeName     = metricEntryPointPrefix + "response_size"
+	entryPointReqsSizeName     = metricEntryPointPrefix + "requests_size"
 
 	// router level.
 	metricRouterPrefix     = MetricNamePrefix + "router_"
@@ -47,6 +49,8 @@ const (
 	routerReqsTLSTotalName = metricRouterPrefix + "requests_tls_total"
 	routerReqDurationName  = metricRouterPrefix + "request_duration_seconds"
 	routerOpenConnsName    = metricRouterPrefix + "open_connections"
+	routerRspsSizeName     = metricRouterPrefix + "response_size"
+	routerReqsSizeName     = metricRouterPrefix + "requests_size"
 
 	// service level.
 	metricServicePrefix     = MetricNamePrefix + "service_"
@@ -56,6 +60,8 @@ const (
 	serviceOpenConnsName    = metricServicePrefix + "open_connections"
 	serviceRetriesTotalName = metricServicePrefix + "retries_total"
 	serviceServerUpName     = metricServicePrefix + "server_up"
+	serviceRspsSizeName     = metricServicePrefix + "response_size"
+	serviceReqsSizeName     = metricServicePrefix + "requests_size"
 )
 
 // promState holds all metric state internally and acts as the only Collector we register for Prometheus.
@@ -173,18 +179,31 @@ func initStandardRegistry(config *types.Prometheus) Registry {
 			Name: entryPointOpenConnsName,
 			Help: "How many open connections exist on an entrypoint, partitioned by method and protocol.",
 		}, []string{"method", "protocol", "entrypoint"})
+		entryPointRspsSize := newGaugeFrom(promState.collectors, stdprometheus.GaugeOpts{
+			Name: entryPointRspsSizeName,
+			Help: "FIXME",
+		}, []string{"code", "method", "protocol", "entrypoint"})
+		entryPointReqsSize := newGaugeFrom(promState.collectors, stdprometheus.GaugeOpts{
+			Name: entryPointReqsSizeName,
+			Help: "FIXME",
+		}, []string{"code", "method", "protocol", "entrypoint"})
 
 		promState.describers = append(promState.describers, []func(chan<- *stdprometheus.Desc){
 			entryPointReqs.cv.Describe,
 			entryPointReqsTLS.cv.Describe,
 			entryPointReqDurations.hv.Describe,
 			entryPointOpenConns.gv.Describe,
+			entryPointRspsSize.gv.Describe,
+			entryPointReqsSize.gv.Describe,
 		}...)
 
 		reg.entryPointReqsCounter = entryPointReqs
 		reg.entryPointReqsTLSCounter = entryPointReqsTLS
 		reg.entryPointReqDurationHistogram, _ = NewHistogramWithScale(entryPointReqDurations, time.Second)
 		reg.entryPointOpenConnsGauge = entryPointOpenConns
+		reg.entryPointOpenConnsGauge = entryPointOpenConns
+		reg.entryPointRspsSizeGauge = entryPointRspsSize
+		reg.entryPointReqsSizeGauge = entryPointReqsSize
 	}
 
 	if config.AddRoutersLabels {
@@ -205,17 +224,29 @@ func initStandardRegistry(config *types.Prometheus) Registry {
 			Name: routerOpenConnsName,
 			Help: "How many open connections exist on a router, partitioned by service, method, and protocol.",
 		}, []string{"method", "protocol", "router", "service"})
+		routerRspsSize := newGaugeFrom(promState.collectors, stdprometheus.GaugeOpts{
+			Name: routerRspsSizeName,
+			Help: "FIXME",
+		}, []string{"code", "method", "protocol", "router", "service"})
+		routerReqsSize := newGaugeFrom(promState.collectors, stdprometheus.GaugeOpts{
+			Name: routerReqsSizeName,
+			Help: "FIXME",
+		}, []string{"code", "method", "protocol", "router", "service"})
 
 		promState.describers = append(promState.describers, []func(chan<- *stdprometheus.Desc){
 			routerReqs.cv.Describe,
 			routerReqsTLS.cv.Describe,
 			routerReqDurations.hv.Describe,
 			routerOpenConns.gv.Describe,
+			routerRspsSize.gv.Describe,
+			routerReqsSize.gv.Describe,
 		}...)
 		reg.routerReqsCounter = routerReqs
 		reg.routerReqsTLSCounter = routerReqsTLS
 		reg.routerReqDurationHistogram, _ = NewHistogramWithScale(routerReqDurations, time.Second)
 		reg.routerOpenConnsGauge = routerOpenConns
+		reg.routerRspsSizeGauge = routerRspsSize
+		reg.routerReqsSizeGauge = routerReqsSize
 	}
 
 	if config.AddServicesLabels {
@@ -244,6 +275,14 @@ func initStandardRegistry(config *types.Prometheus) Registry {
 			Name: serviceServerUpName,
 			Help: "service server is up, described by gauge value of 0 or 1.",
 		}, []string{"service", "url"})
+		serviceRspsSize := newGaugeFrom(promState.collectors, stdprometheus.GaugeOpts{
+			Name: serviceRspsSizeName,
+			Help: "FIXME",
+		}, []string{"code", "method", "protocol", "service"})
+		serviceReqsSize := newGaugeFrom(promState.collectors, stdprometheus.GaugeOpts{
+			Name: serviceReqsSizeName,
+			Help: "FIXME",
+		}, []string{"code", "method", "protocol", "service"})
 
 		promState.describers = append(promState.describers, []func(chan<- *stdprometheus.Desc){
 			serviceReqs.cv.Describe,
@@ -252,6 +291,8 @@ func initStandardRegistry(config *types.Prometheus) Registry {
 			serviceOpenConns.gv.Describe,
 			serviceRetries.cv.Describe,
 			serviceServerUp.gv.Describe,
+			serviceRspsSize.gv.Describe,
+			serviceReqsSize.gv.Describe,
 		}...)
 
 		reg.serviceReqsCounter = serviceReqs
@@ -260,6 +301,8 @@ func initStandardRegistry(config *types.Prometheus) Registry {
 		reg.serviceOpenConnsGauge = serviceOpenConns
 		reg.serviceRetriesCounter = serviceRetries
 		reg.serviceServerUpGauge = serviceServerUp
+		reg.serviceRspsSizeGauge = serviceRspsSize
+		reg.serviceReqsSizeGauge = serviceReqsSize
 	}
 
 	return reg

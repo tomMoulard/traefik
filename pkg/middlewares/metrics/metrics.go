@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"github.com/traefik/traefik/v2/pkg/log"
 	"github.com/traefik/traefik/v2/pkg/metrics"
 	"github.com/traefik/traefik/v2/pkg/middlewares"
+	"github.com/traefik/traefik/v2/pkg/middlewares/capture"
 	"github.com/traefik/traefik/v2/pkg/middlewares/retry"
 	traefiktls "github.com/traefik/traefik/v2/pkg/tls"
 )
@@ -32,6 +34,8 @@ type metricsMiddleware struct {
 	reqsTLSCounter       gokitmetrics.Counter
 	reqDurationHistogram metrics.ScalableHistogram
 	openConnsGauge       gokitmetrics.Gauge
+	rspsSizeGauge        gokitmetrics.Gauge
+	reqsSizeGauge        gokitmetrics.Gauge
 	baseLabels           []string
 }
 
@@ -45,6 +49,8 @@ func NewEntryPointMiddleware(ctx context.Context, next http.Handler, registry me
 		reqsTLSCounter:       registry.EntryPointReqsTLSCounter(),
 		reqDurationHistogram: registry.EntryPointReqDurationHistogram(),
 		openConnsGauge:       registry.EntryPointOpenConnsGauge(),
+		reqsSizeGauge:        registry.EntryPointReqsSizeGauge(),
+		rspsSizeGauge:        registry.EntryPointRspsSizeGauge(),
 		baseLabels:           []string{"entrypoint", entryPointName},
 	}
 }
@@ -59,6 +65,8 @@ func NewRouterMiddleware(ctx context.Context, next http.Handler, registry metric
 		reqsTLSCounter:       registry.RouterReqsTLSCounter(),
 		reqDurationHistogram: registry.RouterReqDurationHistogram(),
 		openConnsGauge:       registry.RouterOpenConnsGauge(),
+		reqsSizeGauge:        registry.RouterReqsSizeGauge(),
+		rspsSizeGauge:        registry.RouterRspsSizeGauge(),
 		baseLabels:           []string{"router", routerName, "service", serviceName},
 	}
 }
@@ -73,6 +81,8 @@ func NewServiceMiddleware(ctx context.Context, next http.Handler, registry metri
 		reqsTLSCounter:       registry.ServiceReqsTLSCounter(),
 		reqDurationHistogram: registry.ServiceReqDurationHistogram(),
 		openConnsGauge:       registry.ServiceOpenConnsGauge(),
+		reqsSizeGauge:        registry.ServiceReqsSizeGauge(),
+		rspsSizeGauge:        registry.ServiceRspsSizeGauge(),
 		baseLabels:           []string{"service", serviceName},
 	}
 }
@@ -115,12 +125,21 @@ func (m *metricsMiddleware) ServeHTTP(rw http.ResponseWriter, req *http.Request)
 		m.reqsTLSCounter.With(tlsLabels...).Add(1)
 	}
 
-	recorder := newResponseRecorder(rw)
 	start := time.Now()
 
-	m.next.ServeHTTP(recorder, req)
+	m.next.ServeHTTP(rw, req)
 
-	labels = append(labels, "code", strconv.Itoa(recorder.getCode()))
+	crw := capture.GetCapturedResponseWriter(req.Context())
+	labels = append(labels, "code", strconv.Itoa(crw.Status()))
+	fmt.Printf("%q\n", labels)
+	if m.rspsSizeGauge != nil {
+		m.rspsSizeGauge.With(labels...).Set(float64(crw.Size()))
+	}
+
+	rr := capture.GetRequestReader(req.Context())
+	if m.reqsSizeGauge != nil {
+		m.reqsSizeGauge.With(labels...).Set(float64(rr.Size()))
+	}
 
 	histograms := m.reqDurationHistogram.With(labels...)
 	histograms.ObserveFromStart(start)
@@ -199,6 +218,6 @@ type RetryListener struct {
 }
 
 // Retried tracks the retry in the RequestMetrics implementation.
-func (m *RetryListener) Retried(req *http.Request, attempt int) {
+func (m *RetryListener) Retried(_ *http.Request, _ int) {
 	m.retryMetrics.ServiceRetriesCounter().With("service", m.serviceName).Add(1)
 }
