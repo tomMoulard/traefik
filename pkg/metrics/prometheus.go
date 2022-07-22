@@ -41,7 +41,7 @@ const (
 	entryPointReqDurationName        = metricEntryPointPrefix + "request_duration_seconds"
 	entryPointOpenConnsName          = metricEntryPointPrefix + "open_connections"
 	entryPointBytesReceivedTotalName = metricEntryPointPrefix + "bytes_received_total"
-	entryPointBytesSendTotalName     = metricEntryPointPrefix + "bytes_sent_total"
+	entryPointBytesSentTotalName     = metricEntryPointPrefix + "bytes_sent_total"
 
 	// router level.
 	metricRouterPrefix           = MetricNamePrefix + "router_"
@@ -50,7 +50,7 @@ const (
 	routerReqDurationName        = metricRouterPrefix + "request_duration_seconds"
 	routerOpenConnsName          = metricRouterPrefix + "open_connections"
 	routerBytesReceivedTotalName = metricRouterPrefix + "bytes_received_total"
-	routerBytesSendTotalName     = metricRouterPrefix + "bytes_sent_total"
+	routerBytesSentTotalName     = metricRouterPrefix + "bytes_sent_total"
 
 	// service level.
 	metricServicePrefix           = MetricNamePrefix + "service_"
@@ -61,7 +61,7 @@ const (
 	serviceRetriesTotalName       = metricServicePrefix + "retries_total"
 	serviceServerUpName           = metricServicePrefix + "server_up"
 	serviceBytesReceivedTotalName = metricServicePrefix + "bytes_received_total"
-	serviceBytesSendTotalName     = metricServicePrefix + "bytes_sent_total"
+	serviceBytesSentTotalName     = metricServicePrefix + "bytes_sent_total"
 )
 
 // promState holds all metric state internally and acts as the only Collector we register for Prometheus.
@@ -184,7 +184,7 @@ func initStandardRegistry(config *types.Prometheus) Registry {
 			Help: "The total size of incoming requests in bytes processed on an entrypoint, partitioned by status code, protocol, and method.",
 		}, []string{"code", "method", "protocol", "entrypoint"})
 		entryPointBytesSendTotal := newCounterFrom(promState.collectors, stdprometheus.CounterOpts{
-			Name: entryPointBytesSendTotalName,
+			Name: entryPointBytesSentTotalName,
 			Help: "The total size of outgoing requests in bytes processed on an entrypoint, partitioned by status code, protocol, and method.",
 		}, []string{"code", "method", "protocol", "entrypoint"})
 
@@ -229,7 +229,7 @@ func initStandardRegistry(config *types.Prometheus) Registry {
 			Help: "The total size of incoming requests in bytes processed on an router, partitioned by service, status code, protocol, and method.",
 		}, []string{"code", "method", "protocol", "router", "service"})
 		routerBytesSendTotal := newCounterFrom(promState.collectors, stdprometheus.CounterOpts{
-			Name: routerBytesSendTotalName,
+			Name: routerBytesSentTotalName,
 			Help: "The total size of outgoing requests in bytes processed on an router, partitioned by service, status code, protocol, and method.",
 		}, []string{"code", "method", "protocol", "router", "service"})
 
@@ -280,7 +280,7 @@ func initStandardRegistry(config *types.Prometheus) Registry {
 			Help: "The total size of incoming requests in bytes processed on an service, partitioned by status code, protocol, and method.",
 		}, []string{"code", "method", "protocol", "service"})
 		serviceBytesSendTotal := newCounterFrom(promState.collectors, stdprometheus.CounterOpts{
-			Name: serviceBytesSendTotalName,
+			Name: serviceBytesSentTotalName,
 			Help: "The total size of outgoing requests in bytes processed on an service, partitioned by status code, protocol, and method.",
 		}, []string{"code", "method", "protocol", "service"})
 
