@@ -179,13 +179,13 @@ func initStandardRegistry(config *types.Prometheus) Registry {
 			Name: entryPointOpenConnsName,
 			Help: "How many open connections exist on an entrypoint, partitioned by method and protocol.",
 		}, []string{"method", "protocol", "entrypoint"})
-		entryPointRspsSize := newGaugeFrom(promState.collectors, stdprometheus.GaugeOpts{
+		entryPointRspsSize := newCounterFrom(promState.collectors, stdprometheus.CounterOpts{
 			Name: entryPointRspsSizeName,
-			Help: "FIXME",
+			Help: "The total size of incoming requests in bytes processed on an entrypoint, partitioned by status code, protocol, and method.",
 		}, []string{"code", "method", "protocol", "entrypoint"})
-		entryPointReqsSize := newGaugeFrom(promState.collectors, stdprometheus.GaugeOpts{
+		entryPointReqsSize := newCounterFrom(promState.collectors, stdprometheus.CounterOpts{
 			Name: entryPointReqsSizeName,
-			Help: "FIXME",
+			Help: "The total size of outgoing requests in bytes processed on an entrypoint, partitioned by status code, protocol, and method.",
 		}, []string{"code", "method", "protocol", "entrypoint"})
 
 		promState.describers = append(promState.describers, []func(chan<- *stdprometheus.Desc){
@@ -193,8 +193,8 @@ func initStandardRegistry(config *types.Prometheus) Registry {
 			entryPointReqsTLS.cv.Describe,
 			entryPointReqDurations.hv.Describe,
 			entryPointOpenConns.gv.Describe,
-			entryPointRspsSize.gv.Describe,
-			entryPointReqsSize.gv.Describe,
+			entryPointRspsSize.cv.Describe,
+			entryPointReqsSize.cv.Describe,
 		}...)
 
 		reg.entryPointReqsCounter = entryPointReqs
@@ -224,13 +224,13 @@ func initStandardRegistry(config *types.Prometheus) Registry {
 			Name: routerOpenConnsName,
 			Help: "How many open connections exist on a router, partitioned by service, method, and protocol.",
 		}, []string{"method", "protocol", "router", "service"})
-		routerRspsSize := newGaugeFrom(promState.collectors, stdprometheus.GaugeOpts{
+		routerRspsSize := newCounterFrom(promState.collectors, stdprometheus.CounterOpts{
 			Name: routerRspsSizeName,
-			Help: "FIXME",
+			Help: "The total size of incoming requests in bytes processed on an router, partitioned by service, status code, protocol, and method.",
 		}, []string{"code", "method", "protocol", "router", "service"})
-		routerReqsSize := newGaugeFrom(promState.collectors, stdprometheus.GaugeOpts{
+		routerReqsSize := newCounterFrom(promState.collectors, stdprometheus.CounterOpts{
 			Name: routerReqsSizeName,
-			Help: "FIXME",
+			Help: "The total size of outgoing requests in bytes processed on an router, partitioned by service, status code, protocol, and method.",
 		}, []string{"code", "method", "protocol", "router", "service"})
 
 		promState.describers = append(promState.describers, []func(chan<- *stdprometheus.Desc){
@@ -238,8 +238,8 @@ func initStandardRegistry(config *types.Prometheus) Registry {
 			routerReqsTLS.cv.Describe,
 			routerReqDurations.hv.Describe,
 			routerOpenConns.gv.Describe,
-			routerRspsSize.gv.Describe,
-			routerReqsSize.gv.Describe,
+			routerRspsSize.cv.Describe,
+			routerReqsSize.cv.Describe,
 		}...)
 		reg.routerReqsCounter = routerReqs
 		reg.routerReqsTLSCounter = routerReqsTLS
@@ -275,13 +275,13 @@ func initStandardRegistry(config *types.Prometheus) Registry {
 			Name: serviceServerUpName,
 			Help: "service server is up, described by gauge value of 0 or 1.",
 		}, []string{"service", "url"})
-		serviceRspsSize := newGaugeFrom(promState.collectors, stdprometheus.GaugeOpts{
+		serviceRspsSize := newCounterFrom(promState.collectors, stdprometheus.CounterOpts{
 			Name: serviceRspsSizeName,
-			Help: "FIXME",
+			Help: "The total size of incoming requests in bytes processed on an service, partitioned by status code, protocol, and method.",
 		}, []string{"code", "method", "protocol", "service"})
-		serviceReqsSize := newGaugeFrom(promState.collectors, stdprometheus.GaugeOpts{
+		serviceReqsSize := newCounterFrom(promState.collectors, stdprometheus.CounterOpts{
 			Name: serviceReqsSizeName,
-			Help: "FIXME",
+			Help: "The total size of outgoing requests in bytes processed on an service, partitioned by status code, protocol, and method.",
 		}, []string{"code", "method", "protocol", "service"})
 
 		promState.describers = append(promState.describers, []func(chan<- *stdprometheus.Desc){
@@ -291,8 +291,8 @@ func initStandardRegistry(config *types.Prometheus) Registry {
 			serviceOpenConns.gv.Describe,
 			serviceRetries.cv.Describe,
 			serviceServerUp.gv.Describe,
-			serviceRspsSize.gv.Describe,
-			serviceReqsSize.gv.Describe,
+			serviceRspsSize.cv.Describe,
+			serviceReqsSize.cv.Describe,
 		}...)
 
 		reg.serviceReqsCounter = serviceReqs

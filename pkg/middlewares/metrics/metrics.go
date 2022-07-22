@@ -2,7 +2,6 @@ package metrics
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -34,8 +33,8 @@ type metricsMiddleware struct {
 	reqsTLSCounter       gokitmetrics.Counter
 	reqDurationHistogram metrics.ScalableHistogram
 	openConnsGauge       gokitmetrics.Gauge
-	rspsSizeGauge        gokitmetrics.Gauge
-	reqsSizeGauge        gokitmetrics.Gauge
+	rspsSizeGauge        gokitmetrics.Counter
+	reqsSizeGauge        gokitmetrics.Counter
 	baseLabels           []string
 }
 
@@ -131,15 +130,10 @@ func (m *metricsMiddleware) ServeHTTP(rw http.ResponseWriter, req *http.Request)
 
 	crw := capture.GetCapturedResponseWriter(req.Context())
 	labels = append(labels, "code", strconv.Itoa(crw.Status()))
-	fmt.Printf("%q\n", labels)
-	if m.rspsSizeGauge != nil {
-		m.rspsSizeGauge.With(labels...).Set(float64(crw.Size()))
-	}
+	m.rspsSizeGauge.With(labels...).Add(float64(crw.Size()))
 
 	rr := capture.GetRequestReader(req.Context())
-	if m.reqsSizeGauge != nil {
-		m.reqsSizeGauge.With(labels...).Set(float64(rr.Size()))
-	}
+	m.reqsSizeGauge.With(labels...).Add(float64(rr.Size()))
 
 	histograms := m.reqDurationHistogram.With(labels...)
 	histograms.ObserveFromStart(start)

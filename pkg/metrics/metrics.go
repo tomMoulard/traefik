@@ -33,16 +33,16 @@ type Registry interface {
 	EntryPointReqsTLSCounter() metrics.Counter
 	EntryPointReqDurationHistogram() ScalableHistogram
 	EntryPointOpenConnsGauge() metrics.Gauge
-	EntryPointReqsSizeGauge() metrics.Gauge
-	EntryPointRspsSizeGauge() metrics.Gauge
+	EntryPointReqsSizeGauge() metrics.Counter
+	EntryPointRspsSizeGauge() metrics.Counter
 
 	// router metrics
 	RouterReqsCounter() metrics.Counter
 	RouterReqsTLSCounter() metrics.Counter
 	RouterReqDurationHistogram() ScalableHistogram
 	RouterOpenConnsGauge() metrics.Gauge
-	RouterReqsSizeGauge() metrics.Gauge
-	RouterRspsSizeGauge() metrics.Gauge
+	RouterReqsSizeGauge() metrics.Counter
+	RouterRspsSizeGauge() metrics.Counter
 
 	// service metrics
 	ServiceReqsCounter() metrics.Counter
@@ -51,8 +51,8 @@ type Registry interface {
 	ServiceOpenConnsGauge() metrics.Gauge
 	ServiceRetriesCounter() metrics.Counter
 	ServiceServerUpGauge() metrics.Gauge
-	ServiceReqsSizeGauge() metrics.Gauge
-	ServiceRspsSizeGauge() metrics.Gauge
+	ServiceReqsSizeGauge() metrics.Counter
+	ServiceRspsSizeGauge() metrics.Counter
 }
 
 // NewVoidRegistry is a noop implementation of metrics.Registry.
@@ -74,22 +74,22 @@ func NewMultiRegistry(registries []Registry) Registry {
 	var entryPointReqsTLSCounter []metrics.Counter
 	var entryPointReqDurationHistogram []ScalableHistogram
 	var entryPointOpenConnsGauge []metrics.Gauge
-	var entryPointReqsSizeGauge []metrics.Gauge
-	var entryPointRspsSizeGauge []metrics.Gauge
+	var entryPointReqsSizeGauge []metrics.Counter
+	var entryPointRspsSizeGauge []metrics.Counter
 	var routerReqsCounter []metrics.Counter
 	var routerReqsTLSCounter []metrics.Counter
 	var routerReqDurationHistogram []ScalableHistogram
 	var routerOpenConnsGauge []metrics.Gauge
-	var routerReqsSizeGauge []metrics.Gauge
-	var routerRspsSizeGauge []metrics.Gauge
+	var routerReqsSizeGauge []metrics.Counter
+	var routerRspsSizeGauge []metrics.Counter
 	var serviceReqsCounter []metrics.Counter
 	var serviceReqsTLSCounter []metrics.Counter
 	var serviceReqDurationHistogram []ScalableHistogram
 	var serviceOpenConnsGauge []metrics.Gauge
 	var serviceRetriesCounter []metrics.Counter
 	var serviceServerUpGauge []metrics.Gauge
-	var serviceReqsSizeGauge []metrics.Gauge
-	var serviceRspsSizeGauge []metrics.Gauge
+	var serviceReqsSizeGauge []metrics.Counter
+	var serviceRspsSizeGauge []metrics.Counter
 
 	for _, r := range registries {
 		if r.ConfigReloadsCounter() != nil {
@@ -138,10 +138,10 @@ func NewMultiRegistry(registries []Registry) Registry {
 			routerOpenConnsGauge = append(routerOpenConnsGauge, r.RouterOpenConnsGauge())
 		}
 		if r.RouterReqsSizeGauge() != nil {
-			routerReqsSizeGauge = append(routerReqsSizeGauge, r.RouterOpenConnsGauge())
+			routerReqsSizeGauge = append(routerReqsSizeGauge, r.RouterReqsSizeGauge())
 		}
 		if r.RouterRspsSizeGauge() != nil {
-			routerRspsSizeGauge = append(routerRspsSizeGauge, r.RouterOpenConnsGauge())
+			routerRspsSizeGauge = append(routerRspsSizeGauge, r.RouterRspsSizeGauge())
 		}
 		if r.ServiceReqsCounter() != nil {
 			serviceReqsCounter = append(serviceReqsCounter, r.ServiceReqsCounter())
@@ -162,10 +162,10 @@ func NewMultiRegistry(registries []Registry) Registry {
 			serviceServerUpGauge = append(serviceServerUpGauge, r.ServiceServerUpGauge())
 		}
 		if r.ServiceReqsSizeGauge() != nil {
-			serviceReqsSizeGauge = append(serviceServerUpGauge, r.ServiceReqsSizeGauge())
+			serviceReqsSizeGauge = append(serviceReqsSizeGauge, r.ServiceReqsSizeGauge())
 		}
 		if r.ServiceRspsSizeGauge() != nil {
-			serviceRspsSizeGauge = append(serviceServerUpGauge, r.ServiceRspsSizeGauge())
+			serviceRspsSizeGauge = append(serviceRspsSizeGauge, r.ServiceRspsSizeGauge())
 		}
 	}
 
@@ -182,22 +182,22 @@ func NewMultiRegistry(registries []Registry) Registry {
 		entryPointReqsTLSCounter:       multi.NewCounter(entryPointReqsTLSCounter...),
 		entryPointReqDurationHistogram: NewMultiHistogram(entryPointReqDurationHistogram...),
 		entryPointOpenConnsGauge:       multi.NewGauge(entryPointOpenConnsGauge...),
-		entryPointReqsSizeGauge:        multi.NewGauge(entryPointReqsSizeGauge...),
-		entryPointRspsSizeGauge:        multi.NewGauge(entryPointRspsSizeGauge...),
+		entryPointReqsSizeGauge:        multi.NewCounter(entryPointReqsSizeGauge...),
+		entryPointRspsSizeGauge:        multi.NewCounter(entryPointRspsSizeGauge...),
 		routerReqsCounter:              multi.NewCounter(routerReqsCounter...),
 		routerReqsTLSCounter:           multi.NewCounter(routerReqsTLSCounter...),
 		routerReqDurationHistogram:     NewMultiHistogram(routerReqDurationHistogram...),
 		routerOpenConnsGauge:           multi.NewGauge(routerOpenConnsGauge...),
-		routerReqsSizeGauge:            multi.NewGauge(routerReqsSizeGauge...),
-		routerRspsSizeGauge:            multi.NewGauge(routerRspsSizeGauge...),
+		routerReqsSizeGauge:            multi.NewCounter(routerReqsSizeGauge...),
+		routerRspsSizeGauge:            multi.NewCounter(routerRspsSizeGauge...),
 		serviceReqsCounter:             multi.NewCounter(serviceReqsCounter...),
 		serviceReqsTLSCounter:          multi.NewCounter(serviceReqsTLSCounter...),
 		serviceReqDurationHistogram:    NewMultiHistogram(serviceReqDurationHistogram...),
 		serviceOpenConnsGauge:          multi.NewGauge(serviceOpenConnsGauge...),
 		serviceRetriesCounter:          multi.NewCounter(serviceRetriesCounter...),
 		serviceServerUpGauge:           multi.NewGauge(serviceServerUpGauge...),
-		serviceReqsSizeGauge:           multi.NewGauge(serviceReqsSizeGauge...),
-		serviceRspsSizeGauge:           multi.NewGauge(serviceRspsSizeGauge...),
+		serviceReqsSizeGauge:           multi.NewCounter(serviceReqsSizeGauge...),
+		serviceRspsSizeGauge:           multi.NewCounter(serviceRspsSizeGauge...),
 	}
 }
 
@@ -214,22 +214,22 @@ type standardRegistry struct {
 	entryPointReqsTLSCounter       metrics.Counter
 	entryPointReqDurationHistogram ScalableHistogram
 	entryPointOpenConnsGauge       metrics.Gauge
-	entryPointRspsSizeGauge        metrics.Gauge
-	entryPointReqsSizeGauge        metrics.Gauge
+	entryPointRspsSizeGauge        metrics.Counter
+	entryPointReqsSizeGauge        metrics.Counter
 	routerReqsCounter              metrics.Counter
 	routerReqsTLSCounter           metrics.Counter
 	routerReqDurationHistogram     ScalableHistogram
 	routerOpenConnsGauge           metrics.Gauge
-	routerRspsSizeGauge            metrics.Gauge
-	routerReqsSizeGauge            metrics.Gauge
+	routerRspsSizeGauge            metrics.Counter
+	routerReqsSizeGauge            metrics.Counter
 	serviceReqsCounter             metrics.Counter
 	serviceReqsTLSCounter          metrics.Counter
 	serviceReqDurationHistogram    ScalableHistogram
 	serviceOpenConnsGauge          metrics.Gauge
 	serviceRetriesCounter          metrics.Counter
 	serviceServerUpGauge           metrics.Gauge
-	serviceRspsSizeGauge           metrics.Gauge
-	serviceReqsSizeGauge           metrics.Gauge
+	serviceRspsSizeGauge           metrics.Counter
+	serviceReqsSizeGauge           metrics.Counter
 }
 
 func (r *standardRegistry) IsEpEnabled() bool {
@@ -280,12 +280,12 @@ func (r *standardRegistry) EntryPointOpenConnsGauge() metrics.Gauge {
 	return r.entryPointOpenConnsGauge
 }
 
-func (r *standardRegistry) EntryPointReqsSizeGauge() metrics.Gauge {
+func (r *standardRegistry) EntryPointReqsSizeGauge() metrics.Counter {
 	return r.entryPointReqsSizeGauge
 }
 
-func (r *standardRegistry) EntryPointRspsSizeGauge() metrics.Gauge {
-	return r.entryPointReqsSizeGauge
+func (r *standardRegistry) EntryPointRspsSizeGauge() metrics.Counter {
+	return r.entryPointRspsSizeGauge
 }
 
 func (r *standardRegistry) RouterReqsCounter() metrics.Counter {
@@ -304,11 +304,11 @@ func (r *standardRegistry) RouterOpenConnsGauge() metrics.Gauge {
 	return r.routerOpenConnsGauge
 }
 
-func (r *standardRegistry) RouterReqsSizeGauge() metrics.Gauge {
+func (r *standardRegistry) RouterReqsSizeGauge() metrics.Counter {
 	return r.routerReqsSizeGauge
 }
 
-func (r *standardRegistry) RouterRspsSizeGauge() metrics.Gauge {
+func (r *standardRegistry) RouterRspsSizeGauge() metrics.Counter {
 	return r.routerRspsSizeGauge
 }
 
@@ -336,11 +336,11 @@ func (r *standardRegistry) ServiceServerUpGauge() metrics.Gauge {
 	return r.serviceServerUpGauge
 }
 
-func (r *standardRegistry) ServiceReqsSizeGauge() metrics.Gauge {
+func (r *standardRegistry) ServiceReqsSizeGauge() metrics.Counter {
 	return r.serviceReqsSizeGauge
 }
 
-func (r *standardRegistry) ServiceRspsSizeGauge() metrics.Gauge {
+func (r *standardRegistry) ServiceRspsSizeGauge() metrics.Counter {
 	return r.serviceRspsSizeGauge
 }
 
