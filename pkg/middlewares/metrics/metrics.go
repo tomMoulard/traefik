@@ -33,8 +33,8 @@ type metricsMiddleware struct {
 	reqsTLSCounter       gokitmetrics.Counter
 	reqDurationHistogram metrics.ScalableHistogram
 	openConnsGauge       gokitmetrics.Gauge
-	rspsSizeGauge        gokitmetrics.Counter
-	reqsSizeGauge        gokitmetrics.Counter
+	bytesReceivedCounter gokitmetrics.Counter
+	bytesSentCounter     gokitmetrics.Counter
 	baseLabels           []string
 }
 
@@ -48,8 +48,8 @@ func NewEntryPointMiddleware(ctx context.Context, next http.Handler, registry me
 		reqsTLSCounter:       registry.EntryPointReqsTLSCounter(),
 		reqDurationHistogram: registry.EntryPointReqDurationHistogram(),
 		openConnsGauge:       registry.EntryPointOpenConnsGauge(),
-		reqsSizeGauge:        registry.EntryPointReqsSizeGauge(),
-		rspsSizeGauge:        registry.EntryPointRspsSizeGauge(),
+		bytesSentCounter:     registry.EntryPointBytesSentCounter(),
+		bytesReceivedCounter: registry.EntryPointBytesReceivedCounter(),
 		baseLabels:           []string{"entrypoint", entryPointName},
 	}
 }
@@ -64,8 +64,8 @@ func NewRouterMiddleware(ctx context.Context, next http.Handler, registry metric
 		reqsTLSCounter:       registry.RouterReqsTLSCounter(),
 		reqDurationHistogram: registry.RouterReqDurationHistogram(),
 		openConnsGauge:       registry.RouterOpenConnsGauge(),
-		reqsSizeGauge:        registry.RouterReqsSizeGauge(),
-		rspsSizeGauge:        registry.RouterRspsSizeGauge(),
+		bytesSentCounter:     registry.RouterBytesSentCounter(),
+		bytesReceivedCounter: registry.RouterBytesReceivedCounter(),
 		baseLabels:           []string{"router", routerName, "service", serviceName},
 	}
 }
@@ -80,8 +80,8 @@ func NewServiceMiddleware(ctx context.Context, next http.Handler, registry metri
 		reqsTLSCounter:       registry.ServiceReqsTLSCounter(),
 		reqDurationHistogram: registry.ServiceReqDurationHistogram(),
 		openConnsGauge:       registry.ServiceOpenConnsGauge(),
-		reqsSizeGauge:        registry.ServiceReqsSizeGauge(),
-		rspsSizeGauge:        registry.ServiceRspsSizeGauge(),
+		bytesSentCounter:     registry.ServiceBytesSentCounter(),
+		bytesReceivedCounter: registry.ServiceBytesReceivedCounter(),
 		baseLabels:           []string{"service", serviceName},
 	}
 }
@@ -130,10 +130,10 @@ func (m *metricsMiddleware) ServeHTTP(rw http.ResponseWriter, req *http.Request)
 
 	crw := capture.GetCapturedResponseWriter(req.Context())
 	labels = append(labels, "code", strconv.Itoa(crw.Status()))
-	m.rspsSizeGauge.With(labels...).Add(float64(crw.Size()))
+	m.bytesSentCounter.With(labels...).Add(float64(crw.Size()))
 
 	rr := capture.GetRequestReader(req.Context())
-	m.reqsSizeGauge.With(labels...).Add(float64(rr.Size()))
+	m.bytesReceivedCounter.With(labels...).Add(float64(rr.Size()))
 
 	histograms := m.reqDurationHistogram.With(labels...)
 	histograms.ObserveFromStart(start)

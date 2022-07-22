@@ -35,33 +35,33 @@ const (
 	tlsCertsNotAfterTimestamp = metricsTLSPrefix + "certs_not_after"
 
 	// entry point.
-	metricEntryPointPrefix     = MetricNamePrefix + "entrypoint_"
-	entryPointReqsTotalName    = metricEntryPointPrefix + "requests_total"
-	entryPointReqsTLSTotalName = metricEntryPointPrefix + "requests_tls_total"
-	entryPointReqDurationName  = metricEntryPointPrefix + "request_duration_seconds"
-	entryPointOpenConnsName    = metricEntryPointPrefix + "open_connections"
-	entryPointRspsSizeName     = metricEntryPointPrefix + "response_size"
-	entryPointReqsSizeName     = metricEntryPointPrefix + "requests_size"
+	metricEntryPointPrefix           = MetricNamePrefix + "entrypoint_"
+	entryPointReqsTotalName          = metricEntryPointPrefix + "requests_total"
+	entryPointReqsTLSTotalName       = metricEntryPointPrefix + "requests_tls_total"
+	entryPointReqDurationName        = metricEntryPointPrefix + "request_duration_seconds"
+	entryPointOpenConnsName          = metricEntryPointPrefix + "open_connections"
+	entryPointBytesReceivedTotalName = metricEntryPointPrefix + "bytes_received_total"
+	entryPointBytesSendTotalName     = metricEntryPointPrefix + "bytes_sent_total"
 
 	// router level.
-	metricRouterPrefix     = MetricNamePrefix + "router_"
-	routerReqsTotalName    = metricRouterPrefix + "requests_total"
-	routerReqsTLSTotalName = metricRouterPrefix + "requests_tls_total"
-	routerReqDurationName  = metricRouterPrefix + "request_duration_seconds"
-	routerOpenConnsName    = metricRouterPrefix + "open_connections"
-	routerRspsSizeName     = metricRouterPrefix + "response_size"
-	routerReqsSizeName     = metricRouterPrefix + "requests_size"
+	metricRouterPrefix           = MetricNamePrefix + "router_"
+	routerReqsTotalName          = metricRouterPrefix + "requests_total"
+	routerReqsTLSTotalName       = metricRouterPrefix + "requests_tls_total"
+	routerReqDurationName        = metricRouterPrefix + "request_duration_seconds"
+	routerOpenConnsName          = metricRouterPrefix + "open_connections"
+	routerBytesReceivedTotalName = metricRouterPrefix + "bytes_received_total"
+	routerBytesSendTotalName     = metricRouterPrefix + "bytes_sent_total"
 
 	// service level.
-	metricServicePrefix     = MetricNamePrefix + "service_"
-	serviceReqsTotalName    = metricServicePrefix + "requests_total"
-	serviceReqsTLSTotalName = metricServicePrefix + "requests_tls_total"
-	serviceReqDurationName  = metricServicePrefix + "request_duration_seconds"
-	serviceOpenConnsName    = metricServicePrefix + "open_connections"
-	serviceRetriesTotalName = metricServicePrefix + "retries_total"
-	serviceServerUpName     = metricServicePrefix + "server_up"
-	serviceRspsSizeName     = metricServicePrefix + "response_size"
-	serviceReqsSizeName     = metricServicePrefix + "requests_size"
+	metricServicePrefix           = MetricNamePrefix + "service_"
+	serviceReqsTotalName          = metricServicePrefix + "requests_total"
+	serviceReqsTLSTotalName       = metricServicePrefix + "requests_tls_total"
+	serviceReqDurationName        = metricServicePrefix + "request_duration_seconds"
+	serviceOpenConnsName          = metricServicePrefix + "open_connections"
+	serviceRetriesTotalName       = metricServicePrefix + "retries_total"
+	serviceServerUpName           = metricServicePrefix + "server_up"
+	serviceBytesReceivedTotalName = metricServicePrefix + "bytes_received_total"
+	serviceBytesSendTotalName     = metricServicePrefix + "bytes_sent_total"
 )
 
 // promState holds all metric state internally and acts as the only Collector we register for Prometheus.
@@ -179,12 +179,12 @@ func initStandardRegistry(config *types.Prometheus) Registry {
 			Name: entryPointOpenConnsName,
 			Help: "How many open connections exist on an entrypoint, partitioned by method and protocol.",
 		}, []string{"method", "protocol", "entrypoint"})
-		entryPointRspsSize := newCounterFrom(promState.collectors, stdprometheus.CounterOpts{
-			Name: entryPointRspsSizeName,
+		entryPointBytesReceivedTotal := newCounterFrom(promState.collectors, stdprometheus.CounterOpts{
+			Name: entryPointBytesReceivedTotalName,
 			Help: "The total size of incoming requests in bytes processed on an entrypoint, partitioned by status code, protocol, and method.",
 		}, []string{"code", "method", "protocol", "entrypoint"})
-		entryPointReqsSize := newCounterFrom(promState.collectors, stdprometheus.CounterOpts{
-			Name: entryPointReqsSizeName,
+		entryPointBytesSendTotal := newCounterFrom(promState.collectors, stdprometheus.CounterOpts{
+			Name: entryPointBytesSendTotalName,
 			Help: "The total size of outgoing requests in bytes processed on an entrypoint, partitioned by status code, protocol, and method.",
 		}, []string{"code", "method", "protocol", "entrypoint"})
 
@@ -193,8 +193,8 @@ func initStandardRegistry(config *types.Prometheus) Registry {
 			entryPointReqsTLS.cv.Describe,
 			entryPointReqDurations.hv.Describe,
 			entryPointOpenConns.gv.Describe,
-			entryPointRspsSize.cv.Describe,
-			entryPointReqsSize.cv.Describe,
+			entryPointBytesReceivedTotal.cv.Describe,
+			entryPointBytesSendTotal.cv.Describe,
 		}...)
 
 		reg.entryPointReqsCounter = entryPointReqs
@@ -202,8 +202,8 @@ func initStandardRegistry(config *types.Prometheus) Registry {
 		reg.entryPointReqDurationHistogram, _ = NewHistogramWithScale(entryPointReqDurations, time.Second)
 		reg.entryPointOpenConnsGauge = entryPointOpenConns
 		reg.entryPointOpenConnsGauge = entryPointOpenConns
-		reg.entryPointRspsSizeGauge = entryPointRspsSize
-		reg.entryPointReqsSizeGauge = entryPointReqsSize
+		reg.entryPointBytesReceivedCounter = entryPointBytesReceivedTotal
+		reg.entryPointBytesSentCounter = entryPointBytesSendTotal
 	}
 
 	if config.AddRoutersLabels {
@@ -224,12 +224,12 @@ func initStandardRegistry(config *types.Prometheus) Registry {
 			Name: routerOpenConnsName,
 			Help: "How many open connections exist on a router, partitioned by service, method, and protocol.",
 		}, []string{"method", "protocol", "router", "service"})
-		routerRspsSize := newCounterFrom(promState.collectors, stdprometheus.CounterOpts{
-			Name: routerRspsSizeName,
+		routerBytesReceivedTotal := newCounterFrom(promState.collectors, stdprometheus.CounterOpts{
+			Name: routerBytesReceivedTotalName,
 			Help: "The total size of incoming requests in bytes processed on an router, partitioned by service, status code, protocol, and method.",
 		}, []string{"code", "method", "protocol", "router", "service"})
-		routerReqsSize := newCounterFrom(promState.collectors, stdprometheus.CounterOpts{
-			Name: routerReqsSizeName,
+		routerBytesSendTotal := newCounterFrom(promState.collectors, stdprometheus.CounterOpts{
+			Name: routerBytesSendTotalName,
 			Help: "The total size of outgoing requests in bytes processed on an router, partitioned by service, status code, protocol, and method.",
 		}, []string{"code", "method", "protocol", "router", "service"})
 
@@ -238,15 +238,15 @@ func initStandardRegistry(config *types.Prometheus) Registry {
 			routerReqsTLS.cv.Describe,
 			routerReqDurations.hv.Describe,
 			routerOpenConns.gv.Describe,
-			routerRspsSize.cv.Describe,
-			routerReqsSize.cv.Describe,
+			routerBytesReceivedTotal.cv.Describe,
+			routerBytesSendTotal.cv.Describe,
 		}...)
 		reg.routerReqsCounter = routerReqs
 		reg.routerReqsTLSCounter = routerReqsTLS
 		reg.routerReqDurationHistogram, _ = NewHistogramWithScale(routerReqDurations, time.Second)
 		reg.routerOpenConnsGauge = routerOpenConns
-		reg.routerRspsSizeGauge = routerRspsSize
-		reg.routerReqsSizeGauge = routerReqsSize
+		reg.routerBytesReceivedCounter = routerBytesReceivedTotal
+		reg.routerBytesSentCounter = routerBytesSendTotal
 	}
 
 	if config.AddServicesLabels {
@@ -275,12 +275,12 @@ func initStandardRegistry(config *types.Prometheus) Registry {
 			Name: serviceServerUpName,
 			Help: "service server is up, described by gauge value of 0 or 1.",
 		}, []string{"service", "url"})
-		serviceRspsSize := newCounterFrom(promState.collectors, stdprometheus.CounterOpts{
-			Name: serviceRspsSizeName,
+		serviceBytesReceivedTotal := newCounterFrom(promState.collectors, stdprometheus.CounterOpts{
+			Name: serviceBytesReceivedTotalName,
 			Help: "The total size of incoming requests in bytes processed on an service, partitioned by status code, protocol, and method.",
 		}, []string{"code", "method", "protocol", "service"})
-		serviceReqsSize := newCounterFrom(promState.collectors, stdprometheus.CounterOpts{
-			Name: serviceReqsSizeName,
+		serviceBytesSendTotal := newCounterFrom(promState.collectors, stdprometheus.CounterOpts{
+			Name: serviceBytesSendTotalName,
 			Help: "The total size of outgoing requests in bytes processed on an service, partitioned by status code, protocol, and method.",
 		}, []string{"code", "method", "protocol", "service"})
 
@@ -291,8 +291,8 @@ func initStandardRegistry(config *types.Prometheus) Registry {
 			serviceOpenConns.gv.Describe,
 			serviceRetries.cv.Describe,
 			serviceServerUp.gv.Describe,
-			serviceRspsSize.cv.Describe,
-			serviceReqsSize.cv.Describe,
+			serviceBytesReceivedTotal.cv.Describe,
+			serviceBytesSendTotal.cv.Describe,
 		}...)
 
 		reg.serviceReqsCounter = serviceReqs
@@ -301,8 +301,8 @@ func initStandardRegistry(config *types.Prometheus) Registry {
 		reg.serviceOpenConnsGauge = serviceOpenConns
 		reg.serviceRetriesCounter = serviceRetries
 		reg.serviceServerUpGauge = serviceServerUp
-		reg.serviceRspsSizeGauge = serviceRspsSize
-		reg.serviceReqsSizeGauge = serviceReqsSize
+		reg.serviceBytesReceivedCounter = serviceBytesReceivedTotal
+		reg.serviceBytesSentCounter = serviceBytesSendTotal
 	}
 
 	return reg
