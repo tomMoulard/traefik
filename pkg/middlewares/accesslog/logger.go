@@ -223,7 +223,7 @@ func (h *Handler) ServeHTTP(rw http.ResponseWriter, req *http.Request, next http
 		core[ClientUsername] = usernameIfPresent(reqWithDataTable.URL)
 	}
 
-	crw := capture.GetCapturedResponseWriter(req.Context())
+	crw := capture.GetResponseWriter(req.Context())
 	logDataTable.DownstreamResponse = downstreamResponse{
 		headers: crw.Header().Clone(),
 		status:  crw.Status(),

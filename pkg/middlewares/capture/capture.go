@@ -1,3 +1,22 @@
+// Package capture is a middleware that captures requests/responses size, status and headers.
+//
+// For another middleware to get those attributes of a requests, this middleware
+// should be added before in the middleware chain.
+//
+//     	handler, _ := NewHandler()
+//     	chain := alice.New().
+//     	     Append(WrapHandler(handler)).
+//     	     Append(myOtherMiddleware).
+//     	     then(...)
+//
+// As this middleware stores those data in the request's context, the data can
+// be retrieved at anytime after the ServerHTTP.
+//
+//     func (h *Handler) ServeHTTP(rw http.ResponseWriter, req *http.Request, next http.Handler) {
+//     ...
+//     	crw := capture.GetResponseWriter(req.Context())
+//     	fmt.Println(crw.Size)
+//     }
 package capture
 
 import (
@@ -7,9 +26,10 @@ import (
 	"github.com/containous/alice"
 )
 
-// Handler will store each request data to its context
-type Handler struct {
-}
+type key string
+
+// Handler will store each request data to its context.
+type Handler struct{}
 
 // WrapHandler Wraps capture handler into an Alice Constructor.
 func WrapHandler(handler *Handler) alice.Constructor {
@@ -29,11 +49,11 @@ func (h *Handler) ServeHTTP(rw http.ResponseWriter, req *http.Request, next http
 	ctx := req.Context()
 	if req.Body != nil {
 		rr := newRequestReader(req.Body)
-		ctx = context.WithValue(ctx, CapturedRRData, rr)
+		ctx = context.WithValue(ctx, capturedRRData, rr)
 		req.Body = rr
 	}
 
-	crw := newCaptureResponseWriter(rw)
-	ctx = context.WithValue(ctx, CapturedRWData, crw)
+	crw := newResponseWriter(rw)
+	ctx = context.WithValue(ctx, capturedRWData, crw)
 	next.ServeHTTP(crw, req.WithContext(ctx))
 }

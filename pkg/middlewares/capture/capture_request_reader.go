@@ -5,7 +5,7 @@ import (
 	"io"
 )
 
-const CapturedRRData string = "CapturedRRData"
+const capturedRRData key = "capturedRRData"
 
 type requestReader struct {
 	// source ReadCloser from where the request body is read.
@@ -15,9 +15,12 @@ type requestReader struct {
 }
 
 func GetRequestReader(ctx context.Context) *requestReader {
-	requestReader, ok := ctx.Value(CapturedRRData).(*requestReader)
+	requestReader, ok := ctx.Value(capturedRRData).(*requestReader)
 	if !ok {
-		panic("WTF?")
+		// This should never happen as the capture middleware should be used
+		// before any other middleware that want to extract data from the
+		// context.
+		return nil
 	}
 
 	return requestReader
@@ -31,7 +34,6 @@ func (r *requestReader) Read(p []byte) (int, error) {
 	n, err := r.source.Read(p)
 	r.size += int64(n)
 	return n, err
-
 }
 
 func (r *requestReader) Close() error {

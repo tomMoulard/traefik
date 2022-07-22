@@ -3,6 +3,9 @@ package accesslog
 import (
 	"net/http"
 	"time"
+
+	"github.com/traefik/traefik/v2/pkg/middlewares/capture"
+	"github.com/vulcand/oxy/utils"
 )
 
 // FieldApply function hook to add data in accesslog.
@@ -47,17 +50,17 @@ func AddServiceFields(rw http.ResponseWriter, req *http.Request, next http.Handl
 
 // AddOriginFields add origin fields.
 func AddOriginFields(rw http.ResponseWriter, req *http.Request, next http.Handler, data *LogData) {
-	// crw := newCaptureResponseWriter(rw)
 	start := time.Now().UTC()
 
-	// next.ServeHTTP(crw, req)
 	next.ServeHTTP(rw, req)
 
 	// use UTC to handle switchover of daylight saving correctly
 	data.Core[OriginDuration] = time.Now().UTC().Sub(start)
-	// data.Core[OriginStatus] = crw.Status()
-	// make copy of headers so we can ensure there is no subsequent mutation during response processing
+	crw := capture.GetResponseWriter(req.Context())
+	data.Core[OriginStatus] = crw.Status()
+	// make copy of headers, so we can ensure there is no subsequent mutation
+	// during response processing
 	data.OriginResponse = make(http.Header)
-	// utils.CopyHeaders(data.OriginResponse, crw.Header())
-	// data.Core[OriginContentSize] = crw.Size()
+	utils.CopyHeaders(data.OriginResponse, crw.Header())
+	data.Core[OriginContentSize] = crw.Size()
 }

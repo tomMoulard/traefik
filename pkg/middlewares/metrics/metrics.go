@@ -128,7 +128,7 @@ func (m *metricsMiddleware) ServeHTTP(rw http.ResponseWriter, req *http.Request)
 
 	m.next.ServeHTTP(rw, req)
 
-	crw := capture.GetCapturedResponseWriter(req.Context())
+	crw := capture.GetResponseWriter(req.Context())
 	labels = append(labels, "code", strconv.Itoa(crw.Status()))
 	m.bytesSentCounter.With(labels...).Add(float64(crw.Size()))
 
