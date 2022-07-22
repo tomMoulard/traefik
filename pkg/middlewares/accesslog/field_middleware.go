@@ -56,7 +56,7 @@ func AddOriginFields(rw http.ResponseWriter, req *http.Request, next http.Handle
 
 	// use UTC to handle switchover of daylight saving correctly
 	data.Core[OriginDuration] = time.Now().UTC().Sub(start)
-	crw := capture.GetResponseWriter(req.Context())
+	crw := capture.GetResponseWriter(req.Context()).GetResponseWriter()
 	data.Core[OriginStatus] = crw.Status()
 	// make copy of headers, so we can ensure there is no subsequent mutation
 	// during response processing

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/containous/alice"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/traefik/traefik/v2/pkg/config/dynamic"
@@ -15,6 +16,7 @@ import (
 	"github.com/traefik/traefik/v2/pkg/config/static"
 	"github.com/traefik/traefik/v2/pkg/metrics"
 	"github.com/traefik/traefik/v2/pkg/middlewares/accesslog"
+	"github.com/traefik/traefik/v2/pkg/middlewares/capture"
 	"github.com/traefik/traefik/v2/pkg/middlewares/requestdecorator"
 	"github.com/traefik/traefik/v2/pkg/server/middleware"
 	"github.com/traefik/traefik/v2/pkg/server/service"
@@ -430,6 +432,9 @@ func TestAccessLog(t *testing.T) {
 			w := httptest.NewRecorder()
 			req := testhelpers.MustNewRequest(http.MethodGet, "http://foo.bar/", nil)
 
+			captureMiddleware, err := capture.NewHandler()
+			require.NoError(t, err)
+
 			accesslogger, err := accesslog.NewHandler(&types.AccessLog{
 				Format: "json",
 			})
@@ -437,7 +442,10 @@ func TestAccessLog(t *testing.T) {
 
 			reqHost := requestdecorator.New(nil)
 
-			accesslogger.ServeHTTP(w, req, http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+			chain := alice.New()
+			chain = chain.Append(capture.WrapHandler(captureMiddleware))
+			chain = chain.Append(accesslog.WrapHandler(accesslogger))
+			handler, err := chain.Then(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 				reqHost.ServeHTTP(w, req, handlers["web"].ServeHTTP)
 
 				data := accesslog.GetLogData(req)
@@ -445,6 +453,9 @@ func TestAccessLog(t *testing.T) {
 
 				assert.Equal(t, test.expected, data.Core[accesslog.RouterName])
 			}))
+			require.NoError(t, err)
+
+			handler.ServeHTTP(w, req)
 		})
 	}
 }

@@ -18,8 +18,8 @@ import (
 type ChainBuilder struct {
 	metricsRegistry        metrics.Registry
 	accessLoggerMiddleware *accesslog.Handler
-	captureMiddleware      *capture.Handler
 	tracer                 *tracing.Tracing
+	captureMiddleware      *capture.Handler
 }
 
 // NewChainBuilder Creates a new ChainBuilder.

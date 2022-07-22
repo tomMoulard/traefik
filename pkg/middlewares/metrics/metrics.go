@@ -128,12 +128,12 @@ func (m *metricsMiddleware) ServeHTTP(rw http.ResponseWriter, req *http.Request)
 
 	m.next.ServeHTTP(rw, req)
 
-	crw := capture.GetResponseWriter(req.Context())
+	c := capture.GetResponseWriter(req.Context())
+	crw := c.GetResponseWriter()
 	labels = append(labels, "code", strconv.Itoa(crw.Status()))
 	m.bytesSentCounter.With(labels...).Add(float64(crw.Size()))
 
-	rr := capture.GetRequestReader(req.Context())
-	m.bytesReceivedCounter.With(labels...).Add(float64(rr.Size()))
+	m.bytesReceivedCounter.With(labels...).Add(float64(c.GetRequestReader().Size()))
 
 	histograms := m.reqDurationHistogram.With(labels...)
 	histograms.ObserveFromStart(start)

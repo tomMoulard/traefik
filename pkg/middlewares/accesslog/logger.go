@@ -223,14 +223,17 @@ func (h *Handler) ServeHTTP(rw http.ResponseWriter, req *http.Request, next http
 		core[ClientUsername] = usernameIfPresent(reqWithDataTable.URL)
 	}
 
-	crw := capture.GetResponseWriter(req.Context())
+	c := capture.GetResponseWriter(req.Context())
+	crw := c.GetResponseWriter()
 	logDataTable.DownstreamResponse = downstreamResponse{
 		headers: crw.Header().Clone(),
 		status:  crw.Status(),
 		size:    crw.Size(),
 	}
 
-	logDataTable.Request.size = capture.GetRequestReader(req.Context()).Size()
+	if crr := c.GetRequestReader(); crr != nil {
+		logDataTable.Request.size = crr.Size()
+	}
 
 	if h.config.BufferingSize > 0 {
 		h.logHandlerChan <- handlerParams{

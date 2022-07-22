@@ -28,6 +28,8 @@ import (
 
 type key string
 
+const capturedData key = "capturedData"
+
 // Handler will store each request data to its context.
 type Handler struct{}
 
@@ -46,14 +48,41 @@ func NewHandler() (*Handler, error) {
 }
 
 func (h *Handler) ServeHTTP(rw http.ResponseWriter, req *http.Request, next http.Handler) {
+	c := Capture{}
 	ctx := req.Context()
 	if req.Body != nil {
-		rr := newRequestReader(req.Body)
-		ctx = context.WithValue(ctx, capturedRRData, rr)
-		req.Body = rr
+		requestReader := newRequestReader(req.Body)
+		c.rr = requestReader
+		req.Body = requestReader
 	}
 
-	crw := newResponseWriter(rw)
-	ctx = context.WithValue(ctx, capturedRWData, crw)
-	next.ServeHTTP(crw, req.WithContext(ctx))
+	responseWriter := newResponseWriter(rw)
+	c.rw = responseWriter
+	ctx = context.WithValue(ctx, capturedData, c)
+	next.ServeHTTP(responseWriter, req.WithContext(ctx))
+}
+
+type Capture struct {
+	rr *requestReader
+	rw responseWriter
+}
+
+func GetResponseWriter(ctx context.Context) Capture {
+	c, ok := ctx.Value(capturedData).(Capture)
+	if !ok {
+		// This should never happen as the capture middleware should be used
+		// before any other middleware that want to extract data from the
+		// context.
+		return Capture{}
+	}
+
+	return c
+}
+
+func (c Capture) GetRequestReader() *requestReader {
+	return c.rr
+}
+
+func (c Capture) GetResponseWriter() responseWriter {
+	return c.rw
 }

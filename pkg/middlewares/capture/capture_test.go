@@ -16,15 +16,16 @@ import (
 func TestCapture(t *testing.T) {
 	wrapMiddleware := func(next http.Handler) (http.Handler, error) {
 		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-			rr := GetRequestReader(req.Context())
-			crw := GetResponseWriter(req.Context())
+			c := GetResponseWriter(req.Context())
+			crr := c.GetRequestReader()
+			crw := c.GetResponseWriter()
 
-			_, err := fmt.Fprintf(rw, "%d,%d,%d,", rr.Size(), crw.Size(), crw.Status())
+			_, err := fmt.Fprintf(rw, "%d,%d,%d,", crr.Size(), crw.Size(), crw.Status())
 			require.NoError(t, err)
 
 			next.ServeHTTP(rw, req)
 
-			_, err = fmt.Fprintf(rw, ",%d,%d,%d", rr.Size(), crw.Size(), crw.Status())
+			_, err = fmt.Fprintf(rw, ",%d,%d,%d", crr.Size(), crw.Size(), crw.Status())
 			require.NoError(t, err)
 		}), nil
 	}

@@ -2,7 +2,6 @@ package capture
 
 import (
 	"bufio"
-	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -10,26 +9,12 @@ import (
 	"github.com/traefik/traefik/v2/pkg/middlewares"
 )
 
-const capturedRWData key = "capturedRWData"
-
 var _ middlewares.Stateful = &responseWriterWithCloseNotify{}
 
 type responseWriter interface {
 	http.ResponseWriter
 	Size() int64
 	Status() int
-}
-
-func GetResponseWriter(ctx context.Context) responseWriter {
-	c, ok := ctx.Value(capturedRWData).(responseWriter)
-	if !ok {
-		// This should never happen as the capture middleware should be used
-		// before any other middleware that want to extract data from the
-		// context.
-		return nil
-	}
-
-	return c
 }
 
 func newResponseWriter(rw http.ResponseWriter) responseWriter {
