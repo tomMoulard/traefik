@@ -5,7 +5,7 @@ description: "Traefik Proxy's HTTP middleware lets you compress responses before
 
 # Compress
 
-Compress allows compressing responses before sending them to the client.
+Compress Allows Compressing Responses before Sending them to the Client
 {: .subtitle }
 
 ![Compress](../../assets/img/middleware/compress.png)

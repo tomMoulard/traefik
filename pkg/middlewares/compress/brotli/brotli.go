@@ -51,7 +51,7 @@ func NewWrapper(cfg Config) (func(http.Handler) http.HandlerFunc, error) {
 				rw:                   rw,
 				bw:                   brotli.NewWriter(rw),
 				minSize:              cfg.MinSize,
-				statusCode:           http.StatusOK, // FIXME: check if needed
+				statusCode:           http.StatusOK,
 				excludedContentTypes: contentTypes,
 			}
 			defer brw.close()
