@@ -116,7 +116,7 @@ func (m *Muxer) AddRoute(rule string, priority int, handler tcp.Handler) error {
 	var matchers matchersTree
 	err = addRule(&matchers, ruleTree)
 	if err != nil {
-		return err
+		return fmt.Errorf("error while adding rule %s: %w", rule, err)
 	}
 
 	var catchAll bool
@@ -216,7 +216,7 @@ type route struct {
 }
 
 // matcher is a matcher func used to match connection properties.
-type matcher func(meta ConnData) bool
+type matcher func(ConnData) bool
 
 // matchersTree represents the matchers tree structure.
 type matchersTree struct {
