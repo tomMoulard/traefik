@@ -14,7 +14,7 @@ func TestClientIPMatcher(t *testing.T) {
 	testCases := []struct {
 		desc          string
 		rule          string
-		expected      map[string]int
+		expected      map[string]bool
 		expectedError bool
 	}{
 		{
@@ -40,25 +40,25 @@ func TestClientIPMatcher(t *testing.T) {
 		{
 			desc: "valid ClientIP matcher",
 			rule: "ClientIP(`127.0.0.1`)",
-			expected: map[string]int{
-				"127.0.0.1":   http.StatusOK,
-				"192.168.1.1": http.StatusNotFound,
+			expected: map[string]bool{
+				"127.0.0.1":   true,
+				"192.168.1.1": false,
 			},
 		},
 		{
 			desc: "valid ClientIP matcher but invalid remote address",
 			rule: "ClientIP(`127.0.0.1`)",
-			expected: map[string]int{
-				"1": http.StatusNotFound,
+			expected: map[string]bool{
+				"1": false,
 			},
 		},
 		{
 			desc: "valid ClientIP matcher using CIDR",
 			rule: "ClientIP(`192.168.1.0/24`)",
-			expected: map[string]int{
-				"192.168.1.1":   http.StatusOK,
-				"192.168.1.100": http.StatusOK,
-				"192.168.2.1":   http.StatusNotFound,
+			expected: map[string]bool{
+				"192.168.1.1":   true,
+				"192.168.1.100": true,
+				"192.168.2.1":   false,
 			},
 		},
 	}
@@ -68,27 +68,23 @@ func TestClientIPMatcher(t *testing.T) {
 		t.Run(test.desc, func(t *testing.T) {
 			t.Parallel()
 
-			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 			muxer, err := NewMuxer()
 			require.NoError(t, err)
 
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 			err = muxer.AddRoute(test.rule, 0, handler)
 			if test.expectedError {
 				require.Error(t, err)
 				return
 			}
-
 			require.NoError(t, err)
 
-			results := make(map[string]int)
+			results := make(map[string]bool)
 			for remoteAddr := range test.expected {
-				w := httptest.NewRecorder()
-
 				req := httptest.NewRequest(http.MethodGet, "https://example.com", http.NoBody)
 				req.RemoteAddr = remoteAddr
 
-				muxer.ServeHTTP(w, req)
-				results[remoteAddr] = w.Code
+				results[remoteAddr] = muxer.Match(req) != nil
 			}
 			assert.Equal(t, test.expected, results)
 		})
@@ -99,7 +95,7 @@ func TestMethodMatcher(t *testing.T) {
 	testCases := []struct {
 		desc          string
 		rule          string
-		expected      map[string]int
+		expected      map[string]bool
 		expectedError bool
 	}{
 		{
@@ -120,17 +116,17 @@ func TestMethodMatcher(t *testing.T) {
 		{
 			desc: "valid Method matcher",
 			rule: "Method(`GET`)",
-			expected: map[string]int{
-				http.MethodGet:  http.StatusOK,
-				http.MethodPost: http.StatusMethodNotAllowed,
+			expected: map[string]bool{
+				http.MethodGet:  true,
+				http.MethodPost: false,
 			},
 		},
 		{
 			desc: "valid Method matcher (lower case)",
 			rule: "Method(`get`)",
-			expected: map[string]int{
-				http.MethodGet:  http.StatusOK,
-				http.MethodPost: http.StatusMethodNotAllowed,
+			expected: map[string]bool{
+				http.MethodGet:  true,
+				http.MethodPost: false,
 			},
 		},
 	}
@@ -140,26 +136,22 @@ func TestMethodMatcher(t *testing.T) {
 		t.Run(test.desc, func(t *testing.T) {
 			t.Parallel()
 
-			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 			muxer, err := NewMuxer()
 			require.NoError(t, err)
 
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 			err = muxer.AddRoute(test.rule, 0, handler)
 			if test.expectedError {
 				require.Error(t, err)
 				return
 			}
-
 			require.NoError(t, err)
 
-			results := make(map[string]int)
+			results := make(map[string]bool)
 			for method := range test.expected {
-				w := httptest.NewRecorder()
-
 				req := httptest.NewRequest(method, "https://example.com", http.NoBody)
 
-				muxer.ServeHTTP(w, req)
-				results[method] = w.Code
+				results[method] = muxer.Match(req) != nil
 			}
 			assert.Equal(t, test.expected, results)
 		})
@@ -170,7 +162,7 @@ func TestHostMatcher(t *testing.T) {
 	testCases := []struct {
 		desc          string
 		rule          string
-		expected      map[string]int
+		expected      map[string]bool
 		expectedError bool
 	}{
 		{
@@ -196,47 +188,47 @@ func TestHostMatcher(t *testing.T) {
 		{
 			desc: "valid Host matcher",
 			rule: "Host(`example.com`)",
-			expected: map[string]int{
-				"https://example.com":      http.StatusOK,
-				"https://example.com/path": http.StatusOK,
-				"https://example.org":      http.StatusNotFound,
-				"https://example.org/path": http.StatusNotFound,
+			expected: map[string]bool{
+				"https://example.com":      true,
+				"https://example.com/path": true,
+				"https://example.org":      false,
+				"https://example.org/path": false,
 			},
 		},
 		{
 			desc: "valid Host matcher - matcher ending with a dot",
 			rule: "Host(`example.com.`)",
-			expected: map[string]int{
-				"https://example.com":       http.StatusOK,
-				"https://example.com/path":  http.StatusOK,
-				"https://example.org":       http.StatusNotFound,
-				"https://example.org/path":  http.StatusNotFound,
-				"https://example.com.":      http.StatusOK,
-				"https://example.com./path": http.StatusOK,
-				"https://example.org.":      http.StatusNotFound,
-				"https://example.org./path": http.StatusNotFound,
+			expected: map[string]bool{
+				"https://example.com":       true,
+				"https://example.com/path":  true,
+				"https://example.org":       false,
+				"https://example.org/path":  false,
+				"https://example.com.":      true,
+				"https://example.com./path": true,
+				"https://example.org.":      false,
+				"https://example.org./path": false,
 			},
 		},
 		{
 			desc: "valid Host matcher - URL ending with a dot",
 			rule: "Host(`example.com`)",
-			expected: map[string]int{
-				"https://example.com.":      http.StatusOK,
-				"https://example.com./path": http.StatusOK,
-				"https://example.org.":      http.StatusNotFound,
-				"https://example.org./path": http.StatusNotFound,
+			expected: map[string]bool{
+				"https://example.com.":      true,
+				"https://example.com./path": true,
+				"https://example.org.":      false,
+				"https://example.org./path": false,
 			},
 		},
 		{
 			desc: "valid Host matcher - puny-coded emoji",
 			rule: "Host(`xn--9t9h.com`)",
-			expected: map[string]int{
-				"https://xn--9t9h.com":      http.StatusOK,
-				"https://xn--9t9h.com/path": http.StatusOK,
-				"https://example.com":       http.StatusNotFound,
-				"https://example.com/path":  http.StatusNotFound,
+			expected: map[string]bool{
+				"https://xn--9t9h.com":      true,
+				"https://xn--9t9h.com/path": true,
+				"https://example.com":       false,
+				"https://example.com/path":  false,
 				// The request's sender must use puny-code.
-				"https://🦭.com": http.StatusNotFound,
+				"https://🦭.com": false,
 			},
 		},
 	}
@@ -246,29 +238,29 @@ func TestHostMatcher(t *testing.T) {
 		t.Run(test.desc, func(t *testing.T) {
 			t.Parallel()
 
-			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 			muxer, err := NewMuxer()
 			require.NoError(t, err)
 
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 			err = muxer.AddRoute(test.rule, 0, handler)
 			if test.expectedError {
 				require.Error(t, err)
 				return
 			}
-
 			require.NoError(t, err)
 
 			// RequestDecorator is necessary for the host rule
 			reqHost := requestdecorator.New(nil)
 
-			results := make(map[string]int)
+			results := make(map[string]bool)
 			for calledURL := range test.expected {
 				w := httptest.NewRecorder()
 
 				req := httptest.NewRequest(http.MethodGet, calledURL, http.NoBody)
 
-				reqHost.ServeHTTP(w, req, muxer.ServeHTTP)
-				results[calledURL] = w.Code
+				reqHost.ServeHTTP(w, req, func(_ http.ResponseWriter, req *http.Request) {
+					results[calledURL] = muxer.Match(req) != nil
+				})
 			}
 			assert.Equal(t, test.expected, results)
 		})
@@ -279,7 +271,7 @@ func TestHostRegexpMatcher(t *testing.T) {
 	testCases := []struct {
 		desc          string
 		rule          string
-		expected      map[string]int
+		expected      map[string]bool
 		expectedError bool
 	}{
 		{
@@ -310,21 +302,21 @@ func TestHostRegexpMatcher(t *testing.T) {
 		{
 			desc: "valid HostRegexp matcher",
 			rule: "HostRegexp(`^[a-zA-Z-]+\\.com$`)",
-			expected: map[string]int{
-				"https://example.com":      http.StatusOK,
-				"https://example.com/path": http.StatusOK,
-				"https://example.org":      http.StatusNotFound,
-				"https://example.org/path": http.StatusNotFound,
+			expected: map[string]bool{
+				"https://example.com":      true,
+				"https://example.com/path": true,
+				"https://example.org":      false,
+				"https://example.org/path": false,
 			},
 		},
 		{
 			desc: "valid HostRegexp matcher with Traefik v2 syntax",
 			rule: "HostRegexp(`{domain:[a-zA-Z-]+\\.com}`)",
-			expected: map[string]int{
-				"https://example.com":      http.StatusNotFound,
-				"https://example.com/path": http.StatusNotFound,
-				"https://example.org":      http.StatusNotFound,
-				"https://example.org/path": http.StatusNotFound,
+			expected: map[string]bool{
+				"https://example.com":      false,
+				"https://example.com/path": false,
+				"https://example.org":      false,
+				"https://example.org/path": false,
 			},
 		},
 	}
@@ -334,10 +326,10 @@ func TestHostRegexpMatcher(t *testing.T) {
 		t.Run(test.desc, func(t *testing.T) {
 			t.Parallel()
 
-			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 			muxer, err := NewMuxer()
 			require.NoError(t, err)
 
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 			err = muxer.AddRoute(test.rule, 0, handler)
 			if test.expectedError {
 				require.Error(t, err)
@@ -346,14 +338,10 @@ func TestHostRegexpMatcher(t *testing.T) {
 
 			require.NoError(t, err)
 
-			results := make(map[string]int)
+			results := make(map[string]bool)
 			for calledURL := range test.expected {
-				w := httptest.NewRecorder()
-
 				req := httptest.NewRequest(http.MethodGet, calledURL, http.NoBody)
-
-				muxer.ServeHTTP(w, req)
-				results[calledURL] = w.Code
+				results[calledURL] = muxer.Match(req) != nil
 			}
 			assert.Equal(t, test.expected, results)
 		})
@@ -364,7 +352,7 @@ func TestPathMatcher(t *testing.T) {
 	testCases := []struct {
 		desc          string
 		rule          string
-		expected      map[string]int
+		expected      map[string]bool
 		expectedError bool
 	}{
 		{
@@ -390,13 +378,13 @@ func TestPathMatcher(t *testing.T) {
 		{
 			desc: "valid Path matcher",
 			rule: "Path(`/css`)",
-			expected: map[string]int{
-				"https://example.com":              http.StatusNotFound,
-				"https://example.com/html":         http.StatusNotFound,
-				"https://example.org/css":          http.StatusOK,
-				"https://example.com/css":          http.StatusOK,
-				"https://example.com/css/":         http.StatusNotFound,
-				"https://example.com/css/main.css": http.StatusNotFound,
+			expected: map[string]bool{
+				"https://example.com":              false,
+				"https://example.com/html":         false,
+				"https://example.org/css":          true,
+				"https://example.com/css":          true,
+				"https://example.com/css/":         false,
+				"https://example.com/css/main.css": false,
 			},
 		},
 	}
@@ -406,10 +394,10 @@ func TestPathMatcher(t *testing.T) {
 		t.Run(test.desc, func(t *testing.T) {
 			t.Parallel()
 
-			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 			muxer, err := NewMuxer()
 			require.NoError(t, err)
 
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 			err = muxer.AddRoute(test.rule, 0, handler)
 			if test.expectedError {
 				require.Error(t, err)
@@ -418,14 +406,10 @@ func TestPathMatcher(t *testing.T) {
 
 			require.NoError(t, err)
 
-			results := make(map[string]int)
+			results := make(map[string]bool)
 			for calledURL := range test.expected {
-				w := httptest.NewRecorder()
-
 				req := httptest.NewRequest(http.MethodGet, calledURL, http.NoBody)
-
-				muxer.ServeHTTP(w, req)
-				results[calledURL] = w.Code
+				results[calledURL] = muxer.Match(req) != nil
 			}
 			assert.Equal(t, test.expected, results)
 		})
@@ -436,7 +420,7 @@ func TestPathRegexpMatcher(t *testing.T) {
 	testCases := []struct {
 		desc          string
 		rule          string
-		expected      map[string]int
+		expected      map[string]bool
 		expectedError bool
 	}{
 		{
@@ -462,34 +446,34 @@ func TestPathRegexpMatcher(t *testing.T) {
 		{
 			desc: "valid PathRegexp matcher",
 			rule: "PathRegexp(`^/(css|js)`)",
-			expected: map[string]int{
-				"https://example.com":              http.StatusNotFound,
-				"https://example.com/html":         http.StatusNotFound,
-				"https://example.org/css":          http.StatusOK,
-				"https://example.com/CSS":          http.StatusNotFound,
-				"https://example.com/css":          http.StatusOK,
-				"https://example.com/css/":         http.StatusOK,
-				"https://example.com/css/main.css": http.StatusOK,
-				"https://example.com/js":           http.StatusOK,
-				"https://example.com/js/":          http.StatusOK,
-				"https://example.com/js/main.js":   http.StatusOK,
+			expected: map[string]bool{
+				"https://example.com":              false,
+				"https://example.com/html":         false,
+				"https://example.org/css":          true,
+				"https://example.com/CSS":          false,
+				"https://example.com/css":          true,
+				"https://example.com/css/":         true,
+				"https://example.com/css/main.css": true,
+				"https://example.com/js":           true,
+				"https://example.com/js/":          true,
+				"https://example.com/js/main.js":   true,
 			},
 		},
 		{
 			desc: "valid PathRegexp matcher with Traefik v2 syntax",
 			rule: `PathRegexp("/{path:(css|js)}")`,
-			expected: map[string]int{
-				"https://example.com":                 http.StatusNotFound,
-				"https://example.com/html":            http.StatusNotFound,
-				"https://example.org/css":             http.StatusNotFound,
-				"https://example.com/{path:css}":      http.StatusOK,
-				"https://example.com/{path:css}/":     http.StatusOK,
-				"https://example.com/%7Bpath:css%7D":  http.StatusOK,
-				"https://example.com/%7Bpath:css%7D/": http.StatusOK,
-				"https://example.com/{path:js}":       http.StatusOK,
-				"https://example.com/{path:js}/":      http.StatusOK,
-				"https://example.com/%7Bpath:js%7D":   http.StatusOK,
-				"https://example.com/%7Bpath:js%7D/":  http.StatusOK,
+			expected: map[string]bool{
+				"https://example.com":                 false,
+				"https://example.com/html":            false,
+				"https://example.org/css":             false,
+				"https://example.com/{path:css}":      true,
+				"https://example.com/{path:css}/":     true,
+				"https://example.com/%7Bpath:css%7D":  true,
+				"https://example.com/%7Bpath:css%7D/": true,
+				"https://example.com/{path:js}":       true,
+				"https://example.com/{path:js}/":      true,
+				"https://example.com/%7Bpath:js%7D":   true,
+				"https://example.com/%7Bpath:js%7D/":  true,
 			},
 		},
 	}
@@ -499,10 +483,10 @@ func TestPathRegexpMatcher(t *testing.T) {
 		t.Run(test.desc, func(t *testing.T) {
 			t.Parallel()
 
-			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 			muxer, err := NewMuxer()
 			require.NoError(t, err)
 
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 			err = muxer.AddRoute(test.rule, 0, handler)
 			if test.expectedError {
 				require.Error(t, err)
@@ -511,14 +495,10 @@ func TestPathRegexpMatcher(t *testing.T) {
 
 			require.NoError(t, err)
 
-			results := make(map[string]int)
+			results := make(map[string]bool)
 			for calledURL := range test.expected {
-				w := httptest.NewRecorder()
-
 				req := httptest.NewRequest(http.MethodGet, calledURL, http.NoBody)
-
-				muxer.ServeHTTP(w, req)
-				results[calledURL] = w.Code
+				results[calledURL] = muxer.Match(req) != nil
 			}
 			assert.Equal(t, test.expected, results)
 		})
@@ -529,7 +509,7 @@ func TestPathPrefixMatcher(t *testing.T) {
 	testCases := []struct {
 		desc          string
 		rule          string
-		expected      map[string]int
+		expected      map[string]bool
 		expectedError bool
 	}{
 		{
@@ -555,13 +535,13 @@ func TestPathPrefixMatcher(t *testing.T) {
 		{
 			desc: "valid PathPrefix matcher",
 			rule: `PathPrefix("/css")`,
-			expected: map[string]int{
-				"https://example.com":              http.StatusNotFound,
-				"https://example.com/html":         http.StatusNotFound,
-				"https://example.org/css":          http.StatusOK,
-				"https://example.com/css":          http.StatusOK,
-				"https://example.com/css/":         http.StatusOK,
-				"https://example.com/css/main.css": http.StatusOK,
+			expected: map[string]bool{
+				"https://example.com":              false,
+				"https://example.com/html":         false,
+				"https://example.org/css":          true,
+				"https://example.com/css":          true,
+				"https://example.com/css/":         true,
+				"https://example.com/css/main.css": true,
 			},
 		},
 	}
@@ -571,26 +551,21 @@ func TestPathPrefixMatcher(t *testing.T) {
 		t.Run(test.desc, func(t *testing.T) {
 			t.Parallel()
 
-			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 			muxer, err := NewMuxer()
 			require.NoError(t, err)
 
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 			err = muxer.AddRoute(test.rule, 0, handler)
 			if test.expectedError {
 				require.Error(t, err)
 				return
 			}
-
 			require.NoError(t, err)
 
-			results := make(map[string]int)
+			results := make(map[string]bool)
 			for calledURL := range test.expected {
-				w := httptest.NewRecorder()
-
 				req := httptest.NewRequest(http.MethodGet, calledURL, http.NoBody)
-
-				muxer.ServeHTTP(w, req)
-				results[calledURL] = w.Code
+				results[calledURL] = muxer.Match(req) != nil
 			}
 			assert.Equal(t, test.expected, results)
 		})
@@ -601,7 +576,7 @@ func TestHeaderMatcher(t *testing.T) {
 	testCases := []struct {
 		desc          string
 		rule          string
-		expected      map[*http.Header]int
+		expected      map[*http.Header]bool
 		expectedError bool
 	}{
 		{
@@ -632,12 +607,13 @@ func TestHeaderMatcher(t *testing.T) {
 		{
 			desc: "valid Header matcher",
 			rule: "Header(`X-Forwarded-Proto`, `https`)",
-			expected: map[*http.Header]int{
-				{"X-Forwarded-Proto": []string{"https"}}:         http.StatusOK,
-				{"x-forwarded-proto": []string{"https"}}:         http.StatusNotFound,
-				{"X-Forwarded-Proto": []string{"http", "https"}}: http.StatusOK,
-				{"X-Forwarded-Proto": []string{"https", "http"}}: http.StatusOK,
-				{"X-Forwarded-Host": []string{"example.com"}}:    http.StatusNotFound,
+			expected: map[*http.Header]bool{
+				{"X-Forwarded-Proto": []string{"https"}}:         true,
+				{"x-forwarded-proto": []string{"https"}}:         false,
+				{"x-forwarded-proto": []string{"HTTPS"}}:         false,
+				{"X-Forwarded-Proto": []string{"http", "https"}}: true,
+				{"X-Forwarded-Proto": []string{"https", "http"}}: true,
+				{"X-Forwarded-Host": []string{"example.com"}}:    false,
 			},
 		},
 	}
@@ -648,10 +624,10 @@ func TestHeaderMatcher(t *testing.T) {
 		t.Run(test.desc, func(t *testing.T) {
 			t.Parallel()
 
-			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 			muxer, err := NewMuxer()
 			require.NoError(t, err)
 
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 			err = muxer.AddRoute(test.rule, 0, handler)
 			if test.expectedError {
 				require.Error(t, err)
@@ -661,13 +637,9 @@ func TestHeaderMatcher(t *testing.T) {
 			require.NoError(t, err)
 
 			for headers := range test.expected {
-				w := httptest.NewRecorder()
-
 				req := httptest.NewRequest(http.MethodGet, "https://example.com", http.NoBody)
 				req.Header = *headers
-
-				muxer.ServeHTTP(w, req)
-				assert.Equal(t, test.expected[headers], w.Code, headers)
+				assert.Equal(t, test.expected[headers], muxer.Match(req) != nil, *headers)
 			}
 		})
 	}
@@ -677,7 +649,7 @@ func TestHeaderRegexpMatcher(t *testing.T) {
 	testCases := []struct {
 		desc          string
 		rule          string
-		expected      map[*http.Header]int
+		expected      map[*http.Header]bool
 		expectedError bool
 	}{
 		{
@@ -713,28 +685,30 @@ func TestHeaderRegexpMatcher(t *testing.T) {
 		{
 			desc: "valid HeaderRegexp matcher",
 			rule: "HeaderRegexp(`X-Forwarded-Proto`, `^https?$`)",
-			expected: map[*http.Header]int{
-				{"X-Forwarded-Proto": []string{"http"}}:        http.StatusOK,
-				{"x-forwarded-proto": []string{"http"}}:        http.StatusNotFound,
-				{"X-Forwarded-Proto": []string{"https"}}:       http.StatusOK,
-				{"X-Forwarded-Proto": []string{"HTTPS"}}:       http.StatusNotFound,
-				{"X-Forwarded-Proto": []string{"ws", "https"}}: http.StatusOK,
-				{"X-Forwarded-Host": []string{"example.com"}}:  http.StatusNotFound,
+			expected: map[*http.Header]bool{
+				{"X-Forwarded-Proto": []string{"http"}}:        true,
+				{"x-forwarded-proto": []string{"http"}}:        false,
+				{"x-forwarded-proto": []string{"HTTPS"}}:       false,
+				{"X-Forwarded-Proto": []string{"https"}}:       true,
+				{"X-Forwarded-Proto": []string{"HTTPS"}}:       false,
+				{"X-Forwarded-Proto": []string{"ws", "https"}}: true,
+				{"X-Forwarded-Host": []string{"example.com"}}:  false,
 			},
 		},
 		{
 			desc: "valid HeaderRegexp matcher with Traefik v2 syntax",
 			rule: "HeaderRegexp(`X-Forwarded-Proto`, `http{secure:s?}`)",
-			expected: map[*http.Header]int{
-				{"X-Forwarded-Proto": []string{"http"}}:                 http.StatusNotFound,
-				{"X-Forwarded-Proto": []string{"https"}}:                http.StatusNotFound,
-				{"X-Forwarded-Proto": []string{"http{secure:}"}}:        http.StatusOK,
-				{"X-Forwarded-Proto": []string{"HTTP{secure:}"}}:        http.StatusNotFound,
-				{"X-Forwarded-Proto": []string{"http{secure:s}"}}:       http.StatusOK,
-				{"X-Forwarded-Proto": []string{"http{secure:S}"}}:       http.StatusNotFound,
-				{"X-Forwarded-Proto": []string{"HTTPS"}}:                http.StatusNotFound,
-				{"X-Forwarded-Proto": []string{"ws", "http{secure:s}"}}: http.StatusOK,
-				{"X-Forwarded-Host": []string{"example.com"}}:           http.StatusNotFound,
+			expected: map[*http.Header]bool{
+				{"X-Forwarded-Proto": []string{"http"}}:                 false,
+				{"X-Forwarded-Proto": []string{"https"}}:                false,
+				{"x-forwarded-proto": []string{"HTTPS"}}:                false,
+				{"X-Forwarded-Proto": []string{"http{secure:}"}}:        true,
+				{"X-Forwarded-Proto": []string{"HTTP{secure:}"}}:        false,
+				{"X-Forwarded-Proto": []string{"http{secure:s}"}}:       true,
+				{"X-Forwarded-Proto": []string{"http{secure:S}"}}:       false,
+				{"X-Forwarded-Proto": []string{"HTTPS"}}:                false,
+				{"X-Forwarded-Proto": []string{"ws", "http{secure:s}"}}: true,
+				{"X-Forwarded-Host": []string{"example.com"}}:           false,
 			},
 		},
 	}
@@ -744,26 +718,21 @@ func TestHeaderRegexpMatcher(t *testing.T) {
 		t.Run(test.desc, func(t *testing.T) {
 			t.Parallel()
 
-			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 			muxer, err := NewMuxer()
 			require.NoError(t, err)
 
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 			err = muxer.AddRoute(test.rule, 0, handler)
 			if test.expectedError {
 				require.Error(t, err)
 				return
 			}
-
 			require.NoError(t, err)
 
 			for headers := range test.expected {
-				w := httptest.NewRecorder()
-
 				req := httptest.NewRequest(http.MethodGet, "https://example.com", http.NoBody)
 				req.Header = *headers
-
-				muxer.ServeHTTP(w, req)
-				assert.Equal(t, test.expected[headers], w.Code, *headers)
+				assert.Equal(t, test.expected[headers], muxer.Match(req) != nil, *headers)
 			}
 		})
 	}
@@ -773,7 +742,7 @@ func TestQueryMatcher(t *testing.T) {
 	testCases := []struct {
 		desc          string
 		rule          string
-		expected      map[string]int
+		expected      map[string]bool
 		expectedError bool
 	}{
 		{
@@ -804,26 +773,26 @@ func TestQueryMatcher(t *testing.T) {
 		{
 			desc: "valid Query matcher",
 			rule: "Query(`q`, `traefik`)",
-			expected: map[string]int{
-				"https://example.com":                     http.StatusNotFound,
-				"https://example.com?q=traefik":           http.StatusOK,
-				"https://example.com?rel=ddg&q=traefik":   http.StatusOK,
-				"https://example.com?q=traefik&q=proxy":   http.StatusOK,
-				"https://example.com?q=awesome&q=traefik": http.StatusOK,
-				"https://example.com?q=nginx":             http.StatusNotFound,
-				"https://example.com?rel=ddg":             http.StatusNotFound,
-				"https://example.com?q=TRAEFIK":           http.StatusNotFound,
-				"https://example.com?Q=traefik":           http.StatusNotFound,
-				"https://example.com?rel=traefik":         http.StatusNotFound,
+			expected: map[string]bool{
+				"https://example.com":                     false,
+				"https://example.com?q=traefik":           true,
+				"https://example.com?rel=ddg&q=traefik":   true,
+				"https://example.com?q=traefik&q=proxy":   true,
+				"https://example.com?q=awesome&q=traefik": true,
+				"https://example.com?q=nginx":             false,
+				"https://example.com?rel=ddg":             false,
+				"https://example.com?q=TRAEFIK":           false,
+				"https://example.com?Q=traefik":           false,
+				"https://example.com?rel=traefik":         false,
 			},
 		},
 		{
 			desc: "valid Query matcher with empty value",
 			rule: "Query(`mobile`)",
-			expected: map[string]int{
-				"https://example.com":             http.StatusNotFound,
-				"https://example.com?mobile":      http.StatusOK,
-				"https://example.com?mobile=true": http.StatusNotFound,
+			expected: map[string]bool{
+				"https://example.com":             false,
+				"https://example.com?mobile":      true,
+				"https://example.com?mobile=true": false,
 			},
 		},
 	}
@@ -833,26 +802,21 @@ func TestQueryMatcher(t *testing.T) {
 		t.Run(test.desc, func(t *testing.T) {
 			t.Parallel()
 
-			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 			muxer, err := NewMuxer()
 			require.NoError(t, err)
 
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 			err = muxer.AddRoute(test.rule, 0, handler)
 			if test.expectedError {
 				require.Error(t, err)
 				return
 			}
-
 			require.NoError(t, err)
 
-			results := make(map[string]int)
+			results := make(map[string]bool)
 			for calledURL := range test.expected {
-				w := httptest.NewRecorder()
-
 				req := httptest.NewRequest(http.MethodGet, calledURL, http.NoBody)
-
-				muxer.ServeHTTP(w, req)
-				results[calledURL] = w.Code
+				results[calledURL] = muxer.Match(req) != nil
 			}
 			assert.Equal(t, test.expected, results)
 		})
@@ -863,7 +827,7 @@ func TestQueryRegexpMatcher(t *testing.T) {
 	testCases := []struct {
 		desc          string
 		rule          string
-		expected      map[string]int
+		expected      map[string]bool
 		expectedError bool
 	}{
 		{
@@ -889,55 +853,55 @@ func TestQueryRegexpMatcher(t *testing.T) {
 		{
 			desc: "valid QueryRegexp matcher",
 			rule: "QueryRegexp(`q`, `^(traefik|nginx)$`)",
-			expected: map[string]int{
-				"https://example.com":                     http.StatusNotFound,
-				"https://example.com?q=traefik":           http.StatusOK,
-				"https://example.com?rel=ddg&q=traefik":   http.StatusOK,
-				"https://example.com?q=traefik&q=proxy":   http.StatusOK,
-				"https://example.com?q=awesome&q=traefik": http.StatusOK,
-				"https://example.com?q=TRAEFIK":           http.StatusNotFound,
-				"https://example.com?Q=traefik":           http.StatusNotFound,
-				"https://example.com?rel=traefik":         http.StatusNotFound,
-				"https://example.com?q=nginx":             http.StatusOK,
-				"https://example.com?rel=ddg&q=nginx":     http.StatusOK,
-				"https://example.com?q=nginx&q=proxy":     http.StatusOK,
-				"https://example.com?q=awesome&q=nginx":   http.StatusOK,
-				"https://example.com?q=NGINX":             http.StatusNotFound,
-				"https://example.com?Q=nginx":             http.StatusNotFound,
-				"https://example.com?rel=nginx":           http.StatusNotFound,
-				"https://example.com?q=haproxy":           http.StatusNotFound,
-				"https://example.com?rel=ddg":             http.StatusNotFound,
+			expected: map[string]bool{
+				"https://example.com":                     false,
+				"https://example.com?q=traefik":           true,
+				"https://example.com?rel=ddg&q=traefik":   true,
+				"https://example.com?q=traefik&q=proxy":   true,
+				"https://example.com?q=awesome&q=traefik": true,
+				"https://example.com?q=TRAEFIK":           false,
+				"https://example.com?Q=traefik":           false,
+				"https://example.com?rel=traefik":         false,
+				"https://example.com?q=nginx":             true,
+				"https://example.com?rel=ddg&q=nginx":     true,
+				"https://example.com?q=nginx&q=proxy":     true,
+				"https://example.com?q=awesome&q=nginx":   true,
+				"https://example.com?q=NGINX":             false,
+				"https://example.com?Q=nginx":             false,
+				"https://example.com?rel=nginx":           false,
+				"https://example.com?q=haproxy":           false,
+				"https://example.com?rel=ddg":             false,
 			},
 		},
 		{
 			desc: "valid QueryRegexp matcher",
 			rule: "QueryRegexp(`q`, `^.*$`)",
-			expected: map[string]int{
-				"https://example.com":                     http.StatusNotFound,
-				"https://example.com?q=traefik":           http.StatusOK,
-				"https://example.com?rel=ddg&q=traefik":   http.StatusOK,
-				"https://example.com?q=traefik&q=proxy":   http.StatusOK,
-				"https://example.com?q=awesome&q=traefik": http.StatusOK,
-				"https://example.com?q=TRAEFIK":           http.StatusOK,
-				"https://example.com?Q=traefik":           http.StatusNotFound,
-				"https://example.com?rel=traefik":         http.StatusNotFound,
-				"https://example.com?q=nginx":             http.StatusOK,
-				"https://example.com?rel=ddg&q=nginx":     http.StatusOK,
-				"https://example.com?q=nginx&q=proxy":     http.StatusOK,
-				"https://example.com?q=awesome&q=nginx":   http.StatusOK,
-				"https://example.com?q=NGINX":             http.StatusOK,
-				"https://example.com?Q=nginx":             http.StatusNotFound,
-				"https://example.com?rel=nginx":           http.StatusNotFound,
-				"https://example.com?q=haproxy":           http.StatusOK,
-				"https://example.com?rel=ddg":             http.StatusNotFound,
+			expected: map[string]bool{
+				"https://example.com":                     false,
+				"https://example.com?q=traefik":           true,
+				"https://example.com?rel=ddg&q=traefik":   true,
+				"https://example.com?q=traefik&q=proxy":   true,
+				"https://example.com?q=awesome&q=traefik": true,
+				"https://example.com?q=TRAEFIK":           true,
+				"https://example.com?Q=traefik":           false,
+				"https://example.com?rel=traefik":         false,
+				"https://example.com?q=nginx":             true,
+				"https://example.com?rel=ddg&q=nginx":     true,
+				"https://example.com?q=nginx&q=proxy":     true,
+				"https://example.com?q=awesome&q=nginx":   true,
+				"https://example.com?q=NGINX":             true,
+				"https://example.com?Q=nginx":             false,
+				"https://example.com?rel=nginx":           false,
+				"https://example.com?q=haproxy":           true,
+				"https://example.com?rel=ddg":             false,
 			},
 		},
 		{
 			desc: "valid QueryRegexp matcher with Traefik v2 syntax",
 			rule: "QueryRegexp(`q`, `{value:(traefik|nginx)}`)",
-			expected: map[string]int{
-				"https://example.com?q=traefik":         http.StatusNotFound,
-				"https://example.com?q={value:traefik}": http.StatusOK,
+			expected: map[string]bool{
+				"https://example.com?q=traefik":         false,
+				"https://example.com?q={value:traefik}": true,
 			},
 		},
 	}
@@ -947,26 +911,21 @@ func TestQueryRegexpMatcher(t *testing.T) {
 		t.Run(test.desc, func(t *testing.T) {
 			t.Parallel()
 
-			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 			muxer, err := NewMuxer()
 			require.NoError(t, err)
 
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 			err = muxer.AddRoute(test.rule, 0, handler)
 			if test.expectedError {
 				require.Error(t, err)
 				return
 			}
-
 			require.NoError(t, err)
 
-			results := make(map[string]int)
+			results := make(map[string]bool)
 			for calledURL := range test.expected {
-				w := httptest.NewRecorder()
-
 				req := httptest.NewRequest(http.MethodGet, calledURL, http.NoBody)
-
-				muxer.ServeHTTP(w, req)
-				results[calledURL] = w.Code
+				results[calledURL] = muxer.Match(req) != nil
 			}
 			assert.Equal(t, test.expected, results)
 		})

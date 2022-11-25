@@ -86,7 +86,8 @@ func (h Handler) createRouter() *mux.Router {
 
 	// Experimental endpoint
 	router.Methods(http.MethodGet).Path("/api/overview").HandlerFunc(h.getOverview)
-
+	// router.AddRoute("Method(`GET`) && Path(`/api/entrypoints`)", 0, h.getEntryPoints)
+	// route.Method(http.MethodGet).Path("/api/entrypoints").Priority(0).HandlerFunc(h.getEntryPoints)
 	router.Methods(http.MethodGet).Path("/api/entrypoints").HandlerFunc(h.getEntryPoints)
 	router.Methods(http.MethodGet).Path("/api/entrypoints/{entryPointID}").HandlerFunc(h.getEntryPoint)
 

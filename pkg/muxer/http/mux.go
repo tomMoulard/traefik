@@ -3,15 +3,16 @@ package http
 import (
 	"fmt"
 	"net/http"
+	"sort"
 
-	"github.com/gorilla/mux"
+	"github.com/rs/zerolog/log"
 	"github.com/traefik/traefik/v2/pkg/rules"
 	"github.com/vulcand/predicate"
 )
 
 // Muxer handles routing with rules.
 type Muxer struct {
-	*mux.Router
+	routes []*route
 	parser predicate.Parser
 }
 
@@ -28,14 +29,34 @@ func NewMuxer() (*Muxer, error) {
 	}
 
 	return &Muxer{
-		Router: mux.NewRouter().SkipClean(true),
 		parser: parser,
 	}, nil
 }
 
+// Match returns the handler of the first route matching the request.
+func (m *Muxer) Match(req *http.Request) http.Handler {
+	for _, route := range m.routes {
+		if route.matchers.match(req) {
+			return route.handler
+		}
+	}
+
+	return nil
+}
+
+// ServeHTTP .
+func (m *Muxer) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+	if handler := m.Match(req); handler != nil {
+		handler.ServeHTTP(rw, req)
+		return
+	}
+
+	http.NotFoundHandler().ServeHTTP(rw, req)
+}
+
 // AddRoute add a new route to the router.
-func (r *Muxer) AddRoute(rule string, priority int, handler http.Handler) error {
-	parse, err := r.parser.Parse(rule)
+func (m *Muxer) AddRoute(rule string, priority int, handler http.Handler) error {
+	parse, err := m.parser.Parse(rule)
 	if err != nil {
 		return fmt.Errorf("error while parsing rule %s: %w", rule, err)
 	}
@@ -49,95 +70,55 @@ func (r *Muxer) AddRoute(rule string, priority int, handler http.Handler) error 
 		priority = len(rule)
 	}
 
-	route := r.NewRoute().Handler(handler).Priority(priority)
-
-	err = addRuleOnRoute(route, buildTree())
+	var matchers matchersTree
+	err = addRule(&matchers, buildTree())
 	if err != nil {
-		route.BuildOnly()
-		return err
+		return fmt.Errorf("error while adding rule %s: %w", rule, err)
 	}
+
+	m.routes = append(m.routes, &route{
+		handler:  handler,
+		matchers: matchers,
+		priority: priority,
+	})
+
+	sort.Sort(routes(m.routes))
 
 	return nil
 }
 
-func addRuleOnRouter(router *mux.Router, rule *rules.Tree) error {
+func addRule(tree *matchersTree, rule *rules.Tree) error {
 	switch rule.Matcher {
-	case "and":
-		route := router.NewRoute()
-		err := addRuleOnRoute(route, rule.RuleLeft)
+	case "and", "or":
+		tree.operator = rule.Matcher
+		tree.left = &matchersTree{}
+		err := addRule(tree.left, rule.RuleLeft)
 		if err != nil {
 			return err
 		}
 
-		return addRuleOnRoute(route, rule.RuleRight)
-	case "or":
-		err := addRuleOnRouter(router, rule.RuleLeft)
-		if err != nil {
-			return err
-		}
-
-		return addRuleOnRouter(router, rule.RuleRight)
+		tree.right = &matchersTree{}
+		return addRule(tree.right, rule.RuleRight)
 	default:
 		err := rules.CheckRule(rule)
 		if err != nil {
 			return err
 		}
 
-		if rule.Not {
-			return not(httpFuncs[rule.Matcher])(router.NewRoute(), rule.Value...)
-		}
-
-		return httpFuncs[rule.Matcher](router.NewRoute(), rule.Value...)
-	}
-}
-
-func addRuleOnRoute(route *mux.Route, rule *rules.Tree) error {
-	switch rule.Matcher {
-	case "and":
-		err := addRuleOnRoute(route, rule.RuleLeft)
-		if err != nil {
-			return err
-		}
-
-		return addRuleOnRoute(route, rule.RuleRight)
-	case "or":
-		subRouter := route.Subrouter()
-
-		err := addRuleOnRouter(subRouter, rule.RuleLeft)
-		if err != nil {
-			return err
-		}
-
-		return addRuleOnRouter(subRouter, rule.RuleRight)
-	default:
-		err := rules.CheckRule(rule)
+		err = httpFuncs[rule.Matcher](tree, rule.Value...)
 		if err != nil {
 			return err
 		}
 
 		if rule.Not {
-			return not(httpFuncs[rule.Matcher])(route, rule.Value...)
+			matcherFunc := tree.matcher
+			tree.matcher = func(req *http.Request) bool {
+				return !matcherFunc(req)
+			}
 		}
-
-		return httpFuncs[rule.Matcher](route, rule.Value...)
 	}
-}
 
-func not(m func(*mux.Route, ...string) error) func(*mux.Route, ...string) error {
-	return func(r *mux.Route, v ...string) error {
-		router := mux.NewRouter()
-
-		err := m(router.NewRoute(), v...)
-		if err != nil {
-			return err
-		}
-
-		r.MatcherFunc(func(req *http.Request, ma *mux.RouteMatch) bool {
-			return !router.Match(req, ma)
-		})
-
-		return nil
-	}
+	return nil
 }
 
 // ParseDomains extract domains from rule.
@@ -163,4 +144,67 @@ func ParseDomains(rule string) ([]string, error) {
 	}
 
 	return buildTree().ParseMatchers([]string{"Host"}), nil
+}
+
+// routes implements sort.Interface.
+type routes []*route
+
+// Len implements sort.Interface.
+func (r routes) Len() int { return len(r) }
+
+// Swap implements sort.Interface.
+func (r routes) Swap(i, j int) { r[i], r[j] = r[j], r[i] }
+
+// Less implements sort.Interface.
+func (r routes) Less(i, j int) bool { return r[i].priority > r[j].priority }
+
+// route holds the matchers to match HTTP route,
+// and the handler that will serve the connection.
+type route struct {
+	// matchers tree structure reflecting the rule.
+	matchers matchersTree
+	// handler responsible for handling the route.
+	handler http.Handler
+	// priority is used to disambiguate between two (or more) rules that would
+	// all match for a given request.
+	// Computed from the matching rule length, if not user-set.
+	priority int
+}
+
+// matcher is a matcher func used to match connection properties.
+type matcher func(*http.Request) bool
+
+// matchersTree represents the matchers tree structure.
+type matchersTree struct {
+	// If matcher is not nil, it means that this matcherTree is a leaf of the tree.
+	// It is therefore mutually exclusive with left and right.
+	matcher matcher
+	// operator to combine the evaluation of left and right leaves.
+	operator string
+	// Mutually exclusive with matcher.
+	left  *matchersTree
+	right *matchersTree
+}
+
+func (m *matchersTree) match(req *http.Request) bool {
+	if m == nil {
+		// This should never happen as it should have been detected during parsing.
+		log.Warn().Msg("Rule matcher is nil")
+		return false
+	}
+
+	if m.matcher != nil {
+		return m.matcher(req)
+	}
+
+	switch m.operator {
+	case "or":
+		return m.left.match(req) || m.right.match(req)
+	case "and":
+		return m.left.match(req) && m.right.match(req)
+	default:
+		// This should never happen as it should have been detected during parsing.
+		log.Warn().Str("operator", m.operator).Msg("Invalid rule operator")
+		return false
+	}
 }

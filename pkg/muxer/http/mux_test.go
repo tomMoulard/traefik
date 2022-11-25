@@ -19,7 +19,7 @@ func TestMuxer(t *testing.T) {
 		rule          string
 		headers       map[string]string
 		remoteAddr    string
-		expected      map[string]int
+		expected      map[string]bool
 		expectedError bool
 	}{
 		{
@@ -39,170 +39,170 @@ func TestMuxer(t *testing.T) {
 		{
 			desc: "Host and PathPrefix",
 			rule: "Host(`localhost`) && PathPrefix(`/css`)",
-			expected: map[string]int{
-				"https://localhost/css": http.StatusOK,
-				"https://localhost/js":  http.StatusNotFound,
+			expected: map[string]bool{
+				"https://localhost/css": true,
+				"https://localhost/js":  false,
 			},
 		},
 		{
 			desc: "Rule with Host OR Host",
 			rule: "Host(`example.com`) || Host(`example.org`)",
-			expected: map[string]int{
-				"https://example.com/css": http.StatusOK,
-				"https://example.org/js":  http.StatusOK,
-				"https://example.eu/html": http.StatusNotFound,
+			expected: map[string]bool{
+				"https://example.com/css": true,
+				"https://example.org/js":  true,
+				"https://example.eu/html": false,
 			},
 		},
 		{
 			desc: "Rule with host OR (host AND path)",
 			rule: `Host("example.com") || (Host("example.org") && Path("/css"))`,
-			expected: map[string]int{
-				"https://example.com/css": http.StatusOK,
-				"https://example.com/js":  http.StatusOK,
-				"https://example.org/css": http.StatusOK,
-				"https://example.org/js":  http.StatusNotFound,
-				"https://example.eu/css":  http.StatusNotFound,
+			expected: map[string]bool{
+				"https://example.com/css": true,
+				"https://example.com/js":  true,
+				"https://example.org/css": true,
+				"https://example.org/js":  false,
+				"https://example.eu/css":  false,
 			},
 		},
 		{
 			desc: "Rule with host OR host AND path",
 			rule: `Host("example.com") || Host("example.org") && Path("/css")`,
-			expected: map[string]int{
-				"https://example.com/css": http.StatusOK,
-				"https://example.com/js":  http.StatusOK,
-				"https://example.org/css": http.StatusOK,
-				"https://example.org/js":  http.StatusNotFound,
-				"https://example.eu/css":  http.StatusNotFound,
+			expected: map[string]bool{
+				"https://example.com/css": true,
+				"https://example.com/js":  true,
+				"https://example.org/css": true,
+				"https://example.org/js":  false,
+				"https://example.eu/css":  false,
 			},
 		},
 		{
 			desc: "Rule with (host OR host) AND path",
 			rule: `(Host("example.com") || Host("example.org")) && Path("/css")`,
-			expected: map[string]int{
-				"https://example.com/css": http.StatusOK,
-				"https://example.com/js":  http.StatusNotFound,
-				"https://example.org/css": http.StatusOK,
-				"https://example.org/js":  http.StatusNotFound,
-				"https://example.eu/css":  http.StatusNotFound,
+			expected: map[string]bool{
+				"https://example.com/css": true,
+				"https://example.com/js":  false,
+				"https://example.org/css": true,
+				"https://example.org/js":  false,
+				"https://example.eu/css":  false,
 			},
 		},
 		{
 			desc: "Rule with (host AND path) OR (host AND path)",
 			rule: `(Host("example.com") && Path("/js")) || ((Host("example.org")) && Path("/css"))`,
-			expected: map[string]int{
-				"https://example.com/css": http.StatusNotFound,
-				"https://example.com/js":  http.StatusOK,
-				"https://example.org/css": http.StatusOK,
-				"https://example.org/js":  http.StatusNotFound,
-				"https://example.eu/css":  http.StatusNotFound,
+			expected: map[string]bool{
+				"https://example.com/css": false,
+				"https://example.com/js":  true,
+				"https://example.org/css": true,
+				"https://example.org/js":  false,
+				"https://example.eu/css":  false,
 			},
 		},
 		{
 			desc: "Rule case UPPER",
 			rule: `PATHPREFIX("/css")`,
-			expected: map[string]int{
-				"https://example.com/css": http.StatusOK,
-				"https://example.com/js":  http.StatusNotFound,
+			expected: map[string]bool{
+				"https://example.com/css": true,
+				"https://example.com/js":  false,
 			},
 		},
 		{
 			desc: "Rule case lower",
 			rule: `pathprefix("/css")`,
-			expected: map[string]int{
-				"https://example.com/css": http.StatusOK,
-				"https://example.com/js":  http.StatusNotFound,
+			expected: map[string]bool{
+				"https://example.com/css": true,
+				"https://example.com/js":  false,
 			},
 		},
 		{
 			desc: "Rule case CamelCase",
 			rule: `PathPrefix("/css")`,
-			expected: map[string]int{
-				"https://example.com/css": http.StatusOK,
-				"https://example.com/js":  http.StatusNotFound,
+			expected: map[string]bool{
+				"https://example.com/css": true,
+				"https://example.com/js":  false,
 			},
 		},
 		{
 			desc: "Rule case Title",
 			rule: `Pathprefix("/css")`,
-			expected: map[string]int{
-				"https://example.com/css": http.StatusOK,
-				"https://example.com/js":  http.StatusNotFound,
+			expected: map[string]bool{
+				"https://example.com/css": true,
+				"https://example.com/js":  false,
 			},
 		},
 		{
 			desc: "Rule with not",
 			rule: `!Host("example.com")`,
-			expected: map[string]int{
-				"https://example.org": http.StatusOK,
-				"https://example.com": http.StatusNotFound,
+			expected: map[string]bool{
+				"https://example.org": true,
+				"https://example.com": false,
 			},
 		},
 		{
 			desc: "Rule with not on multiple route with or",
 			rule: `!(Host("example.com") || Host("example.org"))`,
-			expected: map[string]int{
-				"https://example.eu/js":   http.StatusOK,
-				"https://example.com/css": http.StatusNotFound,
-				"https://example.org/js":  http.StatusNotFound,
+			expected: map[string]bool{
+				"https://example.eu/js":   true,
+				"https://example.com/css": false,
+				"https://example.org/js":  false,
 			},
 		},
 		{
 			desc: "Rule with not on multiple route with and",
 			rule: `!(Host("example.com") && Path("/css"))`,
-			expected: map[string]int{
-				"https://example.com/js":  http.StatusOK,
-				"https://example.eu/css":  http.StatusOK,
-				"https://example.com/css": http.StatusNotFound,
+			expected: map[string]bool{
+				"https://example.com/js":  true,
+				"https://example.eu/css":  true,
+				"https://example.com/css": false,
 			},
 		},
 		{
 			desc: "Rule with not on multiple route with and another not",
 			rule: `!(Host("example.com") && !Path("/css"))`,
-			expected: map[string]int{
-				"https://example.com/css": http.StatusOK,
-				"https://example.org/css": http.StatusOK,
-				"https://example.com/js":  http.StatusNotFound,
+			expected: map[string]bool{
+				"https://example.com/css": true,
+				"https://example.org/css": true,
+				"https://example.com/js":  false,
 			},
 		},
 		{
 			desc: "Rule with not on two rule",
 			rule: `!Host("example.com") || !Path("/css")`,
-			expected: map[string]int{
-				"https://example.com/js":  http.StatusOK,
-				"https://example.org/css": http.StatusOK,
-				"https://example.com/css": http.StatusNotFound,
+			expected: map[string]bool{
+				"https://example.com/js":  true,
+				"https://example.org/css": true,
+				"https://example.com/css": false,
 			},
 		},
 		{
 			desc: "Rule case with double not",
 			rule: `!(!(Host("example.com") && Pathprefix("/css")))`,
-			expected: map[string]int{
-				"https://example.com/css": http.StatusOK,
-				"https://example.com/js":  http.StatusNotFound,
-				"https://example.org/css": http.StatusNotFound,
+			expected: map[string]bool{
+				"https://example.com/css": true,
+				"https://example.com/js":  false,
+				"https://example.org/css": false,
 			},
 		},
 		{
 			desc: "Rule case with not domain",
 			rule: `!Host("example.com") && Pathprefix("/css")`,
-			expected: map[string]int{
-				"https://example.org/css": http.StatusOK,
-				"https://example.org/js":  http.StatusNotFound,
-				"https://example.com/css": http.StatusNotFound,
-				"https://example.com/js":  http.StatusNotFound,
+			expected: map[string]bool{
+				"https://example.org/css": true,
+				"https://example.org/js":  false,
+				"https://example.com/css": false,
+				"https://example.com/js":  false,
 			},
 		},
 		{
 			desc: "Rule with multiple host AND multiple path AND not",
 			rule: `!(Host("example.com") && Path("/js"))`,
-			expected: map[string]int{
-				"https://example.com/js":    http.StatusNotFound,
-				"https://example.com/html":  http.StatusOK,
-				"https://example.org/js":    http.StatusOK,
-				"https://example.com/css":   http.StatusOK,
-				"https://example.org/css":   http.StatusOK,
-				"https://example.org/html":  http.StatusOK,
-				"https://example.eu/images": http.StatusOK,
+			expected: map[string]bool{
+				"https://example.com/js":    false,
+				"https://example.com/html":  true,
+				"https://example.org/js":    true,
+				"https://example.com/css":   true,
+				"https://example.org/css":   true,
+				"https://example.org/html":  true,
+				"https://example.eu/images": true,
 			},
 		},
 	}
@@ -227,8 +227,10 @@ func TestMuxer(t *testing.T) {
 			// RequestDecorator is necessary for the host rule
 			reqHost := requestdecorator.New(nil)
 
-			results := make(map[string]int)
+			results := make(map[string]bool)
 			for calledURL := range test.expected {
+				w := httptest.NewRecorder()
+
 				req := testhelpers.MustNewRequest(http.MethodGet, calledURL, http.NoBody)
 
 				// Useful for the ClientIP matcher
@@ -238,9 +240,10 @@ func TestMuxer(t *testing.T) {
 					req.Header.Set(key, value)
 				}
 
-				w := httptest.NewRecorder()
-				reqHost.ServeHTTP(w, req, muxer.ServeHTTP)
-				results[calledURL] = w.Code
+				reqHost.ServeHTTP(w, req, func(_ http.ResponseWriter, req *http.Request) {
+					results[calledURL] = muxer.Match(req) != nil
+					assert.Equal(t, results[calledURL], muxer.Match(req) != nil)
+				})
 			}
 
 			assert.Equal(t, test.expected, results)
@@ -380,12 +383,13 @@ func Test_addRoutePriority(t *testing.T) {
 				require.NoError(t, err, route.rule)
 			}
 
-			muxer.SortRoutes()
-
 			w := httptest.NewRecorder()
 			req := testhelpers.MustNewRequest(http.MethodGet, test.path, http.NoBody)
 
-			muxer.ServeHTTP(w, req)
+			handler := muxer.Match(req)
+			require.NotNil(t, handler)
+
+			handler.ServeHTTP(w, req)
 
 			assert.Equal(t, test.expected, w.Header().Get("X-From"))
 		})
@@ -454,43 +458,43 @@ func TestEmptyHost(t *testing.T) {
 		desc     string
 		request  string
 		rule     string
-		expected int
+		expected bool
 	}{
 		{
 			desc:     "HostRegexp with absolute-form URL with empty host with non-matching host header",
 			request:  "GET http://@/ HTTP/1.1\r\nHost: example.com\r\n\r\n",
 			rule:     "HostRegexp(`example.com`)",
-			expected: http.StatusOK,
+			expected: true,
 		},
 		{
 			desc:     "Host with absolute-form URL with empty host with non-matching host header",
 			request:  "GET http://@/ HTTP/1.1\r\nHost: example.com\r\n\r\n",
 			rule:     "Host(`example.com`)",
-			expected: http.StatusOK,
+			expected: true,
 		},
 		{
 			desc:     "HostRegexp with absolute-form URL with matching host header",
 			request:  "GET http://example.com/ HTTP/1.1\r\nHost: example.org\r\n\r\n",
 			rule:     "HostRegexp(`example.com`)",
-			expected: http.StatusOK,
+			expected: true,
 		},
 		{
 			desc:     "Host with absolute-form URL with matching host header",
 			request:  "GET http://example.com/ HTTP/1.1\r\nHost: example.org\r\n\r\n",
 			rule:     "Host(`example.com`)",
-			expected: http.StatusOK,
+			expected: true,
 		},
 		{
 			desc:     "HostRegexp with absolute-form URL with non-matching host header",
 			request:  "GET http://example.com/ HTTP/1.1\r\nHost: example.org\r\n\r\n",
 			rule:     "HostRegexp(`example.org`)",
-			expected: http.StatusNotFound,
+			expected: false,
 		},
 		{
 			desc:     "Host with absolute-form URL with non-matching host header",
 			request:  "GET http://example.com/ HTTP/1.1\r\nHost: example.org\r\n\r\n",
 			rule:     "Host(`example.org`)",
-			expected: http.StatusNotFound,
+			expected: false,
 		},
 	}
 
@@ -514,8 +518,9 @@ func TestEmptyHost(t *testing.T) {
 			req, err := http.ReadRequest(bufio.NewReader(bytes.NewReader([]byte(test.request))))
 			require.NoError(t, err)
 
-			reqHost.ServeHTTP(w, req, muxer.ServeHTTP)
-			assert.Equal(t, test.expected, w.Code)
+			reqHost.ServeHTTP(w, req, func(_ http.ResponseWriter, req *http.Request) {
+				assert.Equal(t, test.expected, muxer.Match(req) != nil)
+			})
 		})
 	}
 }
