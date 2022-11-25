@@ -22,6 +22,9 @@ func Append(router *mux.Router, customAssets fs.FS) {
 		assets = webui.FS
 	}
 	// Expose dashboard
+	// router.AddRoute("Method(`Get`) && Path(`/`)", 0, func(resp http.ResponseWriter, req *http.Request) {
+	// 	http.Redirect(resp, req, safePrefix(req)+"/dashboard/", http.StatusFound)
+	// })
 	router.Methods(http.MethodGet).
 		Path("/").
 		HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
