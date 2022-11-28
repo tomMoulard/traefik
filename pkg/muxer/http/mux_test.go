@@ -517,3 +517,86 @@ func TestEmptyHost(t *testing.T) {
 		})
 	}
 }
+
+func TestStatusCode(t *testing.T) {
+	testCases := []struct {
+		desc     string
+		request  string
+		rule     string
+		expected int
+	}{
+		{
+			desc:     "",
+			request:  "GET http://example.com/ HTTP/1.1\r\nHost: example.com\r\n\r\n",
+			rule:     "Host(`example.com`) && Method(`GET`)",
+			expected: http.StatusOK,
+		},
+		{
+			desc:     "",
+			request:  "POST http://example.com/ HTTP/1.1\r\nHost: example.com\r\n\r\n",
+			rule:     "Host(`example.com`) && Method(`GET`)",
+			expected: http.StatusMethodNotAllowed,
+		},
+		{
+			desc:     "",
+			request:  "GET http://@/ HTTP/1.1\r\nHost: example.com\r\n\r\n",
+			rule:     "Method(`GET`) && Host(`example.com`)",
+			expected: http.StatusOK,
+		},
+		{
+			desc:     "",
+			request:  "POST http://@/ HTTP/1.1\r\nHost: example.com\r\n\r\n",
+			rule:     "Method(`GET`) && Host(`example.com`)",
+			expected: http.StatusMethodNotAllowed,
+		},
+		{
+			desc:     "",
+			request:  "GET http://example.com/ HTTP/1.1\r\nHost: example.com\r\n\r\n",
+			rule:     "Host(`foo.com`) && Method(`GET`)",
+			expected: http.StatusNotFound,
+		},
+		{
+			desc:     "",
+			request:  "POST http://example.com/ HTTP/1.1\r\nHost: example.com\r\n\r\n",
+			rule:     "Host(`foo.com`) && Method(`GET`)",
+			expected: http.StatusNotFound,
+		},
+		{
+			desc:     "",
+			request:  "GET http://example.com/ HTTP/1.1\r\nHost: example.com\r\n\r\n",
+			rule:     "Host(`example.com`) && Method(`GET`) && Path(`/foobar`)",
+			expected: http.StatusNotFound,
+		},
+		{
+			desc:     "",
+			request:  "POST http://example.com/ HTTP/1.1\r\nHost: example.com\r\n\r\n",
+			rule:     "Host(`example.com`) && Method(`GET`) && Path(`/foobar`)",
+			expected: http.StatusNotFound,
+		},
+	}
+
+	for _, test := range testCases {
+		test := test
+		t.Run(test.desc, func(t *testing.T) {
+			t.Parallel()
+
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+			muxer, err := NewMuxer()
+			require.NoError(t, err)
+
+			err = muxer.AddRoute(test.rule, 0, handler)
+			require.NoError(t, err)
+
+			// RequestDecorator is necessary for the host rule
+			reqHost := requestdecorator.New(nil)
+
+			w := httptest.NewRecorder()
+
+			req, err := http.ReadRequest(bufio.NewReader(bytes.NewReader([]byte(test.request))))
+			require.NoError(t, err)
+
+			reqHost.ServeHTTP(w, req, muxer.ServeHTTP)
+			assert.Equal(t, test.expected, w.Code)
+		})
+	}
+}

@@ -51,10 +51,10 @@ func (m *Muxer) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	for _, route := range m.routes {
 		if route.matchers.match(req) {
 			handler = route.handler
-			continue
+			break
 		}
 
-		if route.matchers.matcherName == "Method" {
+		if route.matchers.notMatchingReason == "Method" {
 			handler = http.HandlerFunc(func(rw http.ResponseWriter, _ *http.Request) {
 				rw.WriteHeader(http.StatusMethodNotAllowed)
 			})
@@ -202,7 +202,8 @@ type matchersTree struct {
 	left  *matchersTree
 	right *matchersTree
 
-	matcherName string
+	matcherName       string
+	notMatchingReason string
 }
 
 func (m *matchersTree) match(req *http.Request) bool {
@@ -213,14 +214,37 @@ func (m *matchersTree) match(req *http.Request) bool {
 	}
 
 	if m.matcher != nil {
-		return m.matcher(req)
+		match := m.matcher(req)
+		if !match {
+			m.notMatchingReason = m.matcherName
+		}
+		return match
 	}
 
 	switch m.operator {
 	case "or":
-		return m.left.match(req) || m.right.match(req)
+		leftMatch := m.left.match(req)
+		rightMatch := m.right.match(req)
+
+		if !leftMatch {
+			m.notMatchingReason = m.left.matcherName
+		} else if !rightMatch {
+			m.notMatchingReason = m.right.matcherName
+		}
+
+		return leftMatch || rightMatch
 	case "and":
-		return m.left.match(req) && m.right.match(req)
+		leftMatch := m.left.match(req)
+		if !leftMatch {
+			m.notMatchingReason = m.left.matcherName
+			return false
+		}
+
+		rightMatch := m.right.match(req)
+		if !rightMatch {
+			m.notMatchingReason = m.right.matcherName
+		}
+		return rightMatch
 	default:
 		// This should never happen as it should have been detected during parsing.
 		log.Warn().Str("operator", m.operator).Msg("Invalid rule operator")
