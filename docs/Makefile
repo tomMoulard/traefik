@@ -11,7 +11,7 @@ TRAEFIK_DOCS_CHECK_IMAGE ?= $(TRAEFIK_DOCS_BUILD_IMAGE)-check
 SITE_DIR := $(CURDIR)/site
 
 DOCKER_RUN_DOC_PORT := 8000
-DOCKER_RUN_DOC_MOUNTS := -v $(CURDIR):/mkdocs
+DOCKER_RUN_DOC_MOUNTS := -v $(CURDIR):/docusaurus
 DOCKER_RUN_DOC_OPTS := --rm $(DOCKER_RUN_DOC_MOUNTS) -p $(DOCKER_RUN_DOC_PORT):8000
 
 # Default: generates the documentation into $(SITE_DIR)
@@ -21,7 +21,7 @@ docs: docs-clean docs-image docs-lint docs-build docs-verify
 # Writer Mode: build and serve docs on http://localhost:8000 with livereload
 .PHONY: docs-serve
 docs-serve: docs-image
-	docker run  $(DOCKER_RUN_DOC_OPTS) $(TRAEFIK_DOCS_BUILD_IMAGE) mkdocs serve
+	docker run  $(DOCKER_RUN_DOC_OPTS) $(TRAEFIK_DOCS_BUILD_IMAGE) yarn start --host 0.0.0.0 --port 8000
 
 ## Pull image for doc building
 .PHONY: docs-pull-images
@@ -39,7 +39,7 @@ docs-image:
 
 .PHONY: docs-build
 docs-build: docs-image
-	docker run $(DOCKER_RUN_DOC_OPTS) $(TRAEFIK_DOCS_BUILD_IMAGE) sh -c "mkdocs build \
+	docker run $(DOCKER_RUN_DOC_OPTS) $(TRAEFIK_DOCS_BUILD_IMAGE) sh -c "yarn build \
 		&& chown -R $(shell id -u):$(shell id -g) ./site"
 
 .PHONY: docs-verify
