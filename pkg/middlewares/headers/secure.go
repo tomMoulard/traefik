@@ -1,20 +1,25 @@
 package headers
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/traefik/traefik/v2/pkg/config/dynamic"
+	"github.com/traefik/traefik/v2/pkg/middlewares"
 	"github.com/unrolled/secure"
 )
 
 type secureHeader struct {
 	next   http.Handler
 	secure *secure.Secure
-	cfg    dynamic.Headers
+	cfg    dynamic.SecureHeaders
 }
 
 // newSecure constructs a new secure instance with supplied options.
-func newSecure(next http.Handler, cfg dynamic.Headers, contextKey string) *secureHeader {
+func NewSecureHeader(ctx context.Context, next http.Handler, cfg dynamic.SecureHeaders, name string) (http.Handler, error) {
+	logger := middlewares.GetLogger(ctx, name, "SecureHeader")
+	logger.Debug().Interface("config", cfg).Msg("Setting up SecureHeaders")
+
 	opt := secure.Options{
 		BrowserXssFilter:        cfg.BrowserXSSFilter,
 		ContentTypeNosniff:      cfg.ContentTypeNosniff,
@@ -33,14 +38,14 @@ func newSecure(next http.Handler, cfg dynamic.Headers, contextKey string) *secur
 		SSLProxyHeaders:         cfg.SSLProxyHeaders,
 		STSSeconds:              cfg.STSSeconds,
 		PermissionsPolicy:       cfg.PermissionsPolicy,
-		SecureContextKey:        contextKey,
+		SecureContextKey:        name,
 	}
 
 	return &secureHeader{
 		next:   next,
 		secure: secure.New(opt),
 		cfg:    cfg,
-	}
+	}, nil
 }
 
 func (s secureHeader) ServeHTTP(rw http.ResponseWriter, req *http.Request) {

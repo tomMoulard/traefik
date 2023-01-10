@@ -236,6 +236,16 @@ func (b *Builder) buildConstructor(ctx context.Context, middlewareName string) (
 		}
 	}
 
+	// SecureHeader
+	if config.SecureHeaders != nil {
+		if middleware != nil {
+			return nil, badConf
+		}
+		middleware = func(next http.Handler) (http.Handler, error) {
+			return headers.NewSecureHeader(ctx, next, *config.SecureHeaders, middlewareName)
+		}
+	}
+
 	// IPAllowList
 	if config.IPAllowList != nil {
 		if middleware != nil {

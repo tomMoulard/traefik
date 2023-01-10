@@ -23,55 +23,6 @@ func TestNew_withoutOptions(t *testing.T) {
 	assert.Nil(t, mid)
 }
 
-func TestNew_allowedHosts(t *testing.T) {
-	testCases := []struct {
-		desc     string
-		fromHost string
-		expected int
-	}{
-		{
-			desc:     "Should accept the request when given a host that is in the list",
-			fromHost: "foo.com",
-			expected: http.StatusOK,
-		},
-		{
-			desc:     "Should refuse the request when no host is given",
-			fromHost: "",
-			expected: http.StatusInternalServerError,
-		},
-		{
-			desc:     "Should refuse the request when no matching host is given",
-			fromHost: "boo.com",
-			expected: http.StatusInternalServerError,
-		},
-	}
-
-	emptyHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
-
-	cfg := dynamic.Headers{
-		AllowedHosts: []string{"foo.com", "bar.com"},
-	}
-
-	mid, err := New(context.Background(), emptyHandler, cfg, "foo")
-	require.NoError(t, err)
-
-	for _, test := range testCases {
-		test := test
-		t.Run(test.desc, func(t *testing.T) {
-			t.Parallel()
-
-			req := httptest.NewRequest(http.MethodGet, "/foo", nil)
-			req.Host = test.fromHost
-
-			rw := httptest.NewRecorder()
-
-			mid.ServeHTTP(rw, req)
-
-			assert.Equal(t, test.expected, rw.Code)
-		})
-	}
-}
-
 func TestNew_customHeaders(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
 

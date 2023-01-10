@@ -123,6 +123,7 @@ nav:
         - 'ForwardAuth': 'middlewares/http/forwardauth.md'
         - 'GrpcWeb': 'middlewares/http/grpcweb.md'
         - 'Headers': 'middlewares/http/headers.md'
+        - 'SecureHeaders': 'middlewares/http/secureheaders.md'
         - 'IpAllowList': 'middlewares/http/ipallowlist.md'
         - 'InFlightReq': 'middlewares/http/inflightreq.md'
         - 'PassTLSClientCert': 'middlewares/http/passtlsclientcert.md'
