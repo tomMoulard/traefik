@@ -234,7 +234,14 @@ type Headers struct {
 	CustomRequestHeaders map[string]string `json:"customRequestHeaders,omitempty" toml:"customRequestHeaders,omitempty" yaml:"customRequestHeaders,omitempty" export:"true"`
 	// CustomResponseHeaders defines the header names and values to apply to the response.
 	CustomResponseHeaders map[string]string `json:"customResponseHeaders,omitempty" toml:"customResponseHeaders,omitempty" yaml:"customResponseHeaders,omitempty" export:"true"`
+}
 
+// +k8s:deepcopy-gen=true
+
+// SecureHeaders holds the secureHeaders middleware configuration.
+// TODO: True ? This middleware manages the requests and responses headers.
+// More info: https://doc.traefik.io/traefik/v3.0/middlewares/http/secureHeaders/
+type SecureHeaders struct {
 	// AccessControlAllowCredentials defines whether the request can include user credentials.
 	AccessControlAllowCredentials bool `json:"accessControlAllowCredentials,omitempty" toml:"accessControlAllowCredentials,omitempty" yaml:"accessControlAllowCredentials,omitempty" export:"true"`
 	// AccessControlAllowHeaders defines the Access-Control-Request-Headers values sent in preflight response.
@@ -251,32 +258,6 @@ type Headers struct {
 	AccessControlMaxAge int64 `json:"accessControlMaxAge,omitempty" toml:"accessControlMaxAge,omitempty" yaml:"accessControlMaxAge,omitempty" export:"true"`
 	// AddVaryHeader defines whether the Vary header is automatically added/updated when the AccessControlAllowOriginList is set.
 	AddVaryHeader bool `json:"addVaryHeader,omitempty" toml:"addVaryHeader,omitempty" yaml:"addVaryHeader,omitempty" export:"true"`
-}
-
-// HasCustomHeadersDefined checks to see if any of the custom header elements have been set.
-func (h *Headers) HasCustomHeadersDefined() bool {
-	return h != nil && (len(h.CustomResponseHeaders) != 0 ||
-		len(h.CustomRequestHeaders) != 0)
-}
-
-// HasCorsHeadersDefined checks to see if any of the cors header elements have been set.
-func (h *Headers) HasCorsHeadersDefined() bool {
-	return h != nil && (h.AccessControlAllowCredentials ||
-		len(h.AccessControlAllowHeaders) != 0 ||
-		len(h.AccessControlAllowMethods) != 0 ||
-		len(h.AccessControlAllowOriginList) != 0 ||
-		len(h.AccessControlAllowOriginListRegex) != 0 ||
-		len(h.AccessControlExposeHeaders) != 0 ||
-		h.AccessControlMaxAge != 0 ||
-		h.AddVaryHeader)
-}
-
-// +k8s:deepcopy-gen=true
-
-// SecureHeaders holds the secureHeaders middleware configuration.
-// TODO: True ? This middleware manages the requests and responses headers.
-// More info: https://doc.traefik.io/traefik/v3.0/middlewares/http/secureHeaders/
-type SecureHeaders struct {
 	// AllowedHosts defines the fully qualified list of allowed domain names.
 	AllowedHosts []string `json:"allowedHosts,omitempty" toml:"allowedHosts,omitempty" yaml:"allowedHosts,omitempty"`
 	// HostsProxyHeaders defines the header keys that may hold a proxied hostname value for the request.
@@ -320,6 +301,18 @@ type SecureHeaders struct {
 	// If you would like your development environment to mimic production with complete Host blocking, SSL redirects,
 	// and STS headers, leave this as false.
 	IsDevelopment bool `json:"isDevelopment,omitempty" toml:"isDevelopment,omitempty" yaml:"isDevelopment,omitempty" export:"true"`
+}
+
+// HasCorsHeadersDefined checks to see if any of the cors header elements have been set.
+func (h *SecureHeaders) HasCorsHeadersDefined() bool {
+	return h != nil && (h.AccessControlAllowCredentials ||
+		len(h.AccessControlAllowHeaders) != 0 ||
+		len(h.AccessControlAllowMethods) != 0 ||
+		len(h.AccessControlAllowOriginList) != 0 ||
+		len(h.AccessControlAllowOriginListRegex) != 0 ||
+		len(h.AccessControlExposeHeaders) != 0 ||
+		h.AccessControlMaxAge != 0 ||
+		h.AddVaryHeader)
 }
 
 // +k8s:deepcopy-gen=true

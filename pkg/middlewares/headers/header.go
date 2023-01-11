@@ -1,10 +1,7 @@
 package headers
 
 import (
-	"fmt"
 	"net/http"
-	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/traefik/traefik/v2/pkg/config/dynamic"
@@ -14,26 +11,15 @@ import (
 // A single headerOptions struct can be provided to configure which features should be enabled,
 // and the ability to override a few of the default values.
 type Header struct {
-	next               http.Handler
-	hasCustomHeaders   bool
-	hasCorsHeaders     bool
-	headers            *dynamic.Headers
-	allowOriginRegexes []*regexp.Regexp
+	next             http.Handler
+	hasCustomHeaders bool
+	headers          *dynamic.Headers
 }
 
 // NewHeader constructs a new header instance from supplied frontend header struct.
 func NewHeader(next http.Handler, cfg dynamic.Headers) (*Header, error) {
 	hasCustomHeaders := cfg.HasCustomHeadersDefined()
 	hasCorsHeaders := cfg.HasCorsHeadersDefined()
-
-	regexes := make([]*regexp.Regexp, len(cfg.AccessControlAllowOriginListRegex))
-	for i, str := range cfg.AccessControlAllowOriginListRegex {
-		reg, err := regexp.Compile(str)
-		if err != nil {
-			return nil, fmt.Errorf("error occurred during origin parsing: %w", err)
-		}
-		regexes[i] = reg
-	}
 
 	return &Header{
 		next:               next,
@@ -45,11 +31,6 @@ func NewHeader(next http.Handler, cfg dynamic.Headers) (*Header, error) {
 }
 
 func (s *Header) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
-	// Handle Cors headers and preflight if configured.
-	if isPreflight := s.processCorsHeaders(rw, req); isPreflight {
-		return
-	}
-
 	if s.hasCustomHeaders {
 		s.modifyCustomRequestHeaders(req)
 	}
@@ -124,61 +105,4 @@ func (s *Header) PostRequestModifyResponseHeaders(res *http.Response) error {
 
 	res.Header.Set("Vary", varyHeader)
 	return nil
-}
-
-// processCorsHeaders processes the incoming request,
-// and returns if it is a preflight request.
-// If not a preflight, it handles the preRequestModifyCorsResponseHeaders.
-func (s *Header) processCorsHeaders(rw http.ResponseWriter, req *http.Request) bool {
-	if !s.hasCorsHeaders {
-		return false
-	}
-
-	reqAcMethod := req.Header.Get("Access-Control-Request-Method")
-	originHeader := req.Header.Get("Origin")
-
-	if reqAcMethod != "" && originHeader != "" && req.Method == http.MethodOptions {
-		// If the request is an OPTIONS request with an Access-Control-Request-Method header,
-		// and Origin headers, then it is a CORS preflight request,
-		// and we need to build a custom response: https://www.w3.org/TR/cors/#preflight-request
-		if s.headers.AccessControlAllowCredentials {
-			rw.Header().Set("Access-Control-Allow-Credentials", "true")
-		}
-
-		allowHeaders := strings.Join(s.headers.AccessControlAllowHeaders, ",")
-		if allowHeaders != "" {
-			rw.Header().Set("Access-Control-Allow-Headers", allowHeaders)
-		}
-
-		allowMethods := strings.Join(s.headers.AccessControlAllowMethods, ",")
-		if allowMethods != "" {
-			rw.Header().Set("Access-Control-Allow-Methods", allowMethods)
-		}
-
-		allowed, match := s.isOriginAllowed(originHeader)
-		if allowed {
-			rw.Header().Set("Access-Control-Allow-Origin", match)
-		}
-
-		rw.Header().Set("Access-Control-Max-Age", strconv.Itoa(int(s.headers.AccessControlMaxAge)))
-		return true
-	}
-
-	return false
-}
-
-func (s *Header) isOriginAllowed(origin string) (bool, string) {
-	for _, item := range s.headers.AccessControlAllowOriginList {
-		if item == "*" || item == origin {
-			return true, item
-		}
-	}
-
-	for _, regex := range s.allowOriginRegexes {
-		if regex.MatchString(origin) {
-			return true, origin
-		}
-	}
-
-	return false, ""
 }

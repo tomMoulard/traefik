@@ -3,7 +3,6 @@ package headers
 
 import (
 	"context"
-	"errors"
 	"net/http"
 
 	"github.com/opentracing/opentracing-go/ext"
@@ -27,13 +26,6 @@ func New(ctx context.Context, next http.Handler, cfg dynamic.Headers, name strin
 	// HeaderMiddleware -> SecureMiddleWare -> next
 	logger := middlewares.GetLogger(ctx, name, typeName)
 	logger.Debug().Msg("Creating middleware")
-
-	hasCustomHeaders := cfg.HasCustomHeadersDefined()
-	hasCorsHeaders := cfg.HasCorsHeadersDefined()
-
-	if !hasCustomHeaders && !hasCorsHeaders {
-		return nil, errors.New("headers configuration not valid")
-	}
 
 	var handler http.Handler
 	nextHandler := next
