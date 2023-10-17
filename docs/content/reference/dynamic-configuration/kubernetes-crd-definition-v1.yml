@@ -933,6 +933,53 @@ spec:
                       type: string
                     type: array
                 type: object
+              fail2ban:
+                properties:
+                  blacklist:
+                    description: Fail2Ban
+                    properties:
+                      files:
+                        items:
+                          type: string
+                        type: array
+                      ip:
+                        items:
+                          type: string
+                        type: array
+                    type: object
+                  rules:
+                    properties:
+                      bantime:
+                        type: string
+                      enabled:
+                        type: boolean
+                      findtime:
+                        type: string
+                      maxretry:
+                        type: integer
+                      urlregexps:
+                        items:
+                          properties:
+                            mode:
+                              type: string
+                            regexp:
+                              type: string
+                          type: object
+                        type: array
+                    type: object
+                  whitelist:
+                    description: Fail2Ban
+                    properties:
+                      files:
+                        items:
+                          type: string
+                        type: array
+                      ip:
+                        items:
+                          type: string
+                        type: array
+                    type: object
+                type: object
               forwardAuth:
                 description: 'ForwardAuth holds the forward auth middleware configuration.
                   This middleware delegates the request authentication to a Service.

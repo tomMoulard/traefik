@@ -305,6 +305,7 @@ func (p *Provider) loadConfigurationFromCRD(ctx context.Context, client Client) 
 			Retry:             retry,
 			ContentType:       middleware.Spec.ContentType,
 			GrpcWeb:           middleware.Spec.GrpcWeb,
+			Fail2ban:          middleware.Spec.Fail2ban,
 			Plugin:            plugin,
 		}
 	}

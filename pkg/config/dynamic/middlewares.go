@@ -35,6 +35,7 @@ type Middleware struct {
 	Retry             *Retry             `json:"retry,omitempty" toml:"retry,omitempty" yaml:"retry,omitempty" export:"true"`
 	ContentType       *ContentType       `json:"contentType,omitempty" toml:"contentType,omitempty" yaml:"contentType,omitempty" label:"allowEmpty" file:"allowEmpty" kv:"allowEmpty" export:"true"`
 	GrpcWeb           *GrpcWeb           `json:"grpcWeb,omitempty" toml:"grpcWeb,omitempty" yaml:"grpcWeb,omitempty" export:"true"`
+	Fail2ban          *Fail2ban          `json:"fail2ban,omitempty" toml:"fail2ban,omitempty" yaml:"fail2ban,omitempty" export:"true"`
 
 	Plugin map[string]PluginConf `json:"plugin,omitempty" toml:"plugin,omitempty" yaml:"plugin,omitempty" export:"true"`
 }
@@ -610,3 +611,31 @@ type TLSClientCertificateSubjectDNInfo struct {
 
 // Users holds a list of users.
 type Users []string
+
+// List TODO list
+type List struct {
+	IP    []string `json:"ip,omitempty" toml:"ip,omitempty" yaml:"ip,omitempty" export:"true"`
+	Files []string `json:"files,omitempty" toml:"files,omitempty" yaml:"files,omitempty" export:"true"`
+}
+
+// Urlregexp TODO Urlregexp
+type Urlregexp struct {
+	Regexp string `json:"regexp,omitempty" toml:"regexp,omitempty" yaml:"regexp,omitempty" export:"true"`
+	Mode   string `json:"mode,omitempty" toml:"mode,omitempty" yaml:"mode,omitempty" export:"true"`
+}
+
+// Rules TODO Rules
+type Rules struct {
+	Bantime    string      `json:"bantime,omitempty" toml:"bantime,omitempty" yaml:"bantime,omitempty" export:"true"`
+	Enabled    bool        `json:"enabled,omitempty" toml:"enabled,omitempty" yaml:"enabled,omitempty" export:"true"`
+	Findtime   string      `json:"findtime,omitempty" toml:"findtime,omitempty" yaml:"findtime,omitempty" export:"true"`
+	Maxretry   int         `json:"maxretry,omitempty" toml:"maxretry,omitempty" yaml:"maxretry,omitempty" export:"true"`
+	Urlregexps []Urlregexp `json:"urlregexps,omitempty" toml:"urlregexps,omitempty" yaml:"urlregexps,omitempty" export:"true"`
+}
+
+// Fail2ban TODO Fail2ban
+type Fail2ban struct {
+	Blacklist List  `json:"blacklist,omitempty" toml:"blacklist,omitempty" yaml:"blacklist,omitempty" export:"true"`
+	Whitelist List  `json:"whitelist,omitempty" toml:"whitelist,omitempty" yaml:"whitelist,omitempty" export:"true"`
+	Rules     Rules `json:"rules,omitempty" toml:"rules,omitempty" yaml:"rules,omitempty" export:"true"`
+}
